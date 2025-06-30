@@ -2,7 +2,6 @@
 
 ## Étapes pour configurer le pc pour travailler avec l’ur30 et faire fonctionner l’admittance 
 
-- supprimer devel et build dans le WS
 - remplacer « titouan » par username avec vscode (dans ws), ctrl maj f
 - sudo apt update
 - sudo apt install ros-noetic-desktop-full (suivre un tuto pour installer ros)
