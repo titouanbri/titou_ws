@@ -56,16 +56,22 @@ class admittance_control(object):
         self.timer_name =[]
         self.timer_value =[]
 
+        #variable pour changer de robot
+        self.tool_frame="tool0"
+        self.base_frame="base_link"
+
         robot_description = rospy.get_param("/robot_description")
         robot = URDF.from_xml_string(robot_description)
         ok, tree = treeFromUrdfModel(robot)
-        chain = tree.getChain("base_link", "fake_gripper")  # adapte ces noms à ton robot
+        chain = tree.getChain("base_link", self.tool_frame)  # adapte ces noms à ton robot
 
         self.kdl_chain = chain
         self.kdl_jnt_to_jac_solver = PyKDL.ChainJntToJacSolver(chain)
 
         self.correction = R.from_euler('z', -np.pi / 2)  #correction constante pour le capteur
         self.cg_history = deque(maxlen=100)  # Moyenne glissante sur 10 valeurs pour le centre de gravité 
+
+
 
     def timer_init(self):
         # self.timer_name =["init"]
@@ -122,8 +128,8 @@ class admittance_control(object):
 
         
         seuil_norme_q=0.1
-        tool_frame="fake_gripper"
-        base_frame="base_link"
+        tool_frame=self.tool_frame
+        base_frame=self.base_frame
 
        
 
@@ -216,7 +222,7 @@ class admittance_control(object):
             # Crée un nouveau message WrenchStamped
             new_wrench = WrenchStamped()
             new_wrench.header.stamp = wrench_msg.header.stamp
-            new_wrench.header.frame_id = tool_frame
+            new_wrench.header.frame_id = self.tool_frame
             new_wrench.wrench.force.x = force_trans[0]
             new_wrench.wrench.force.y = force_trans[1]
             new_wrench.wrench.force.z = force_trans[2]
@@ -321,18 +327,18 @@ class admittance_control(object):
                 continue
 
             
-
-
+            #recup force (from force_sensor_publisher)
             fx = wrench_global.wrench.force.x
             fy = wrench_global.wrench.force.y
             fz = wrench_global.wrench.force.z
             tx = wrench_global.wrench.torque.x
             ty = wrench_global.wrench.torque.y
             tz = wrench_global.wrench.torque.z
-
             current_force = np.array([fx,fy,fz,tx,ty,tz])
 
-
+            #recup pos joint
+            joint_values = [self.joint_state.position[self.joint_state.name.index(jn)] for jn in joint_names]  #arange l'ordre des joint
+            joint_values_np = np.array(joint_values)
 
 
             #filtre passe bas exponentiel
@@ -343,9 +349,8 @@ class admittance_control(object):
             filtered_force = smoothed_rel
 
 
-            # Admittance dynamics
 
-            # test nouvelle zone morte
+            # test zone morte
             if np.linalg.norm(filtered_force[:3]) < force_dead_zone_cart :
                     filtered_force[0] = 0.0
                     filtered_force[1] = 0.0
@@ -357,7 +362,21 @@ class admittance_control(object):
             
             
             
-         
+            # 1. Remplir KDL.JntArray
+            jnt_array = PyKDL.JntArray(len(joint_values))
+            for i, pos in enumerate(joint_values):
+                jnt_array[i] = pos
+
+            # # # # 2. Calculer la Jacobienne
+            jacobian = PyKDL.Jacobian(len(joint_values))
+            self.kdl_jnt_to_jac_solver.JntToJac(jnt_array, jacobian)
+
+            # # # # 3. Convertir en NumPy
+            jacobian = np.array([[jacobian[i, j] for j in range(jacobian.columns())] for i in range(6)])
+
+
+            
+            # Admittance dynamics
             a_k = (filtered_force - B_mat* v_k - K_mat * x_k) /M_mat
             # a_k[axis] = max(min(a_k[axis], max_jerk), -max_jerk)
             v_k += a_k * dt
@@ -365,74 +384,48 @@ class admittance_control(object):
             # v_k[axis] = max(min(v_k[axis], max_vel), -max_vel)
 
 
+            ee_vel = v_k
+
+            joint_velocities = np.linalg.pinv(jacobian).dot(ee_vel)
+
+            
+            
+
+            # publication pour tracer pas mal de truc finalement 
+            # norme_F=np.linalg.norm(np.array([filtered_force['x'],filtered_force['y'],filtered_force['z'],filtered_force['rx'], filtered_force['ry'], filtered_force['rz']]))
+            # norme_F0=np.linalg.norm(np.array([zero_force['x'],zero_force['y'],zero_force['z'],zero_force['rx'], zero_force['ry'], zero_force['rz']]))
+
+            # msg_filt = WrenchStamped()
+            # msg_filt.header.stamp = rospy.Time.now()
+            # msg_filt.header.frame_id = "base_link"  # ou le frame que tu utilises
+            # msg_filt.wrench.force = Vector3(1/smoothed_dt, 0, filtered_force['z'])
+            # msg_filt.wrench.torque = Vector3(filtered_force['rx'], filtered_force['ry'], filtered_force['rz'])
+            # filtered_force_pub.publish(msg_filt)
 
             
 
-            try:
-                #acquisition pos joint
-                # joint_values = self.move_group.get_current_joint_values()
-                joint_values = [self.joint_state.position[self.joint_state.name.index(jn)] for jn in joint_names]  #arange l'ordre des joint
-                #calle cul de la jaques au bienne
-                # jacobian = self.move_group.get_jacobian_matrix(joint_values)  
-                # # Détection du repère de la Jacobienne
-                # jacobian_frame = self.move_group.get_pose_reference_frame()
 
-                # 1. Remplir KDL.JntArray
-                jnt_array = PyKDL.JntArray(len(joint_values))
-                for i, pos in enumerate(joint_values):
-                    jnt_array[i] = pos
-
-                # # # # 2. Calculer la Jacobienne
-                jacobian = PyKDL.Jacobian(len(joint_values))
-                self.kdl_jnt_to_jac_solver.JntToJac(jnt_array, jacobian)
-
-                # # # # 3. Convertir en NumPy
-                jacobian = np.array([[jacobian[i, j] for j in range(jacobian.columns())] for i in range(6)])
-
-                ee_vel = v_k
-
-                joint_velocities = np.linalg.pinv(jacobian).dot(ee_vel)
-
-                
-                
-
-                # publication pour tracer pas mal de truc finalement 
-                # norme_F=np.linalg.norm(np.array([filtered_force['x'],filtered_force['y'],filtered_force['z'],filtered_force['rx'], filtered_force['ry'], filtered_force['rz']]))
-                # norme_F0=np.linalg.norm(np.array([zero_force['x'],zero_force['y'],zero_force['z'],zero_force['rx'], zero_force['ry'], zero_force['rz']]))
-
-                # msg_filt = WrenchStamped()
-                # msg_filt.header.stamp = rospy.Time.now()
-                # msg_filt.header.frame_id = "base_link"  # ou le frame que tu utilises
-                # msg_filt.wrench.force = Vector3(1/smoothed_dt, 0, filtered_force['z'])
-                # msg_filt.wrench.torque = Vector3(filtered_force['rx'], filtered_force['ry'], filtered_force['rz'])
-                # filtered_force_pub.publish(msg_filt)
-
-                
+            if joint_velocity_smoothed is None:
+                joint_velocity_smoothed = joint_velocities
+            else:
+                joint_velocity_smoothed = V_alpha * joint_velocities + (1 - V_alpha) * joint_velocity_smoothed
 
 
-                if joint_velocity_smoothed is None:
-                    joint_velocity_smoothed = joint_velocities
-                else:
-                    joint_velocity_smoothed = V_alpha * joint_velocities + (1 - V_alpha) * joint_velocity_smoothed
+            
+
+            
+            vel_msg= Float64MultiArray()
+            vel_msg.data= joint_velocity_smoothed.tolist()
+            joint_vel_pub.publish(vel_msg)
 
 
-                
-
-                
-                vel_msg= Float64MultiArray()
-                vel_msg.data= joint_velocity_smoothed.tolist()
-                joint_vel_pub.publish(vel_msg)
-
-
-                self.timer_add("fin")
+            self.timer_add("fin")
 
                 
                
 
 
 
-            except Exception as e:
-                rospy.logwarn("Erreur dans le calcul ou la publication : %s", str(e))
     
             rate.sleep()
 
