@@ -1,8 +1,0 @@
-prefix=/home/titouan/catkin_ws/devel
-
-Name: bota_driver_testing
-Description: Description of bota_driver_testing
-Version: 0.6.1
-Cflags: 
-Libs: -L${prefix}/lib -lbota_driver_testing
-Requires: bota_node rokubimini rokubimini_serial rokubimini_ethercat rokubimini_bus_manager rostest rosgraph_msgs geometry_msgs rokubimini_msgs

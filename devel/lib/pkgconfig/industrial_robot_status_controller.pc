@@ -1,8 +1,0 @@
-prefix=/home/titouan/catkin_ws/devel
-
-Name: industrial_robot_status_controller
-Description: Description of industrial_robot_status_controller
-Version: 0.1.2
-Cflags: 
-Libs: -L${prefix}/lib 
-Requires: 

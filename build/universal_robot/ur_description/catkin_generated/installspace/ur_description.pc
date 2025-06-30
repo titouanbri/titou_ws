@@ -1,8 +1,0 @@
-prefix=/home/titouan/catkin_ws/install
-
-Name: ur_description
-Description: Description of ur_description
-Version: 1.4.0
-Cflags: 
-Libs: -L${prefix}/lib 
-Requires: 

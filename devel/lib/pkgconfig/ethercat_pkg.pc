@@ -1,8 +1,0 @@
-prefix=/home/titouan/catkin_ws/devel
-
-Name: ethercat_pkg
-Description: Description of ethercat_pkg
-Version: 0.0.0
-Cflags: 
-Libs: -L${prefix}/lib 
-Requires: 

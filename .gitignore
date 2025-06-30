@@ -1,0 +1,6 @@
+# Ignorer les dossiers de build et d’environnement ROS
+build/
+devel/
+
+# Ignorer la config VSCode
+.vscode/

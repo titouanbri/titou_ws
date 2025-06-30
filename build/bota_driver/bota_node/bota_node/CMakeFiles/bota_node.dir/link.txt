@@ -1,1 +1,0 @@
-/usr/bin/c++ -fPIC   -shared -Wl,-soname,libbota_node.so -o /home/titouan/catkin_ws/devel/lib/libbota_node.so CMakeFiles/bota_node.dir/src/Node.cpp.o 

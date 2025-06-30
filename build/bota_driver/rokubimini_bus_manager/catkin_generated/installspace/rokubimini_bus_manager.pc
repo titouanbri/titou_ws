@@ -1,8 +1,0 @@
-prefix=/home/titouan/catkin_ws/install
-
-Name: rokubimini_bus_manager
-Description: Description of rokubimini_bus_manager
-Version: 0.6.1
-Cflags: -I${prefix}/include
-Libs: -L${prefix}/lib -lrokubimini_bus_manager
-Requires: rokubimini bota_node

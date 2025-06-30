@@ -1,8 +1,0 @@
-prefix=/home/titouan/catkin_ws/install
-
-Name: bota_signal_handler
-Description: Description of bota_signal_handler
-Version: 0.6.1
-Cflags: -I${prefix}/include
-Libs: -L${prefix}/lib -lbota_signal_handler
-Requires: 

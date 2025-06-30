@@ -1,8 +1,0 @@
-prefix=/home/titouan/catkin_ws/devel
-
-Name: rokubimini_description
-Description: Description of rokubimini_description
-Version: 0.6.1
-Cflags: 
-Libs: -L${prefix}/lib 
-Requires: sensor_msgs std_msgs xacro

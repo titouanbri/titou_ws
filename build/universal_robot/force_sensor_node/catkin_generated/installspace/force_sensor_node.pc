@@ -1,8 +1,0 @@
-prefix=/home/titouan/catkin_ws/install
-
-Name: force_sensor_node
-Description: Description of force_sensor_node
-Version: 0.0.0
-Cflags: 
-Libs: -L${prefix}/lib 
-Requires: 
