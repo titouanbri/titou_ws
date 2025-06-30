@@ -1,6 +1,9 @@
 import serial
 import time
 
+
+
+
 def send_ascii(ser, cmd):
     ser.write((cmd + '\n').encode())
     ser.flush()
