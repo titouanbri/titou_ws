@@ -1,0 +1,8 @@
+prefix=/home/titouan/catkin_ws/install
+
+Name: industrial_robot_status_interface
+Description: Description of industrial_robot_status_interface
+Version: 0.1.2
+Cflags: -I${prefix}/include
+Libs: -L${prefix}/lib 
+Requires: hardware_interface

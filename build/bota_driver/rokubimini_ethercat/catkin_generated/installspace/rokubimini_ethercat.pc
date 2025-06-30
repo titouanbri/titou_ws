@@ -1,0 +1,8 @@
+prefix=/home/titouan/catkin_ws/install
+
+Name: rokubimini_ethercat
+Description: Description of rokubimini_ethercat
+Version: 0.6.1
+Cflags: -I${prefix}/include
+Libs: -L${prefix}/lib -lrokubimini_ethercat
+Requires: ethercat_grant rokubimini rokubimini_bus_manager rokubimini_msgs soem

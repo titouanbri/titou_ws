@@ -1,0 +1,8 @@
+prefix=/home/titouan/catkin_ws/devel
+
+Name: bota_node
+Description: Description of bota_node
+Version: 0.6.1
+Cflags: -I/home/titouan/catkin_ws/src/bota_driver/bota_node/bota_node/include
+Libs: -L${prefix}/lib -lbota_node -lpthread
+Requires: bota_worker roscpp bota_signal_handler

@@ -1,0 +1,2 @@
+set(rokubimini_msgs_MESSAGE_FILES "/home/titouan/catkin_ws/src/bota_driver/rokubimini_msgs/msg/Reading.msg")
+set(rokubimini_msgs_SERVICE_FILES "/home/titouan/catkin_ws/src/bota_driver/rokubimini_msgs/srv/GetSensorConfiguration.srv;/home/titouan/catkin_ws/src/bota_driver/rokubimini_msgs/srv/SetSensorConfiguration.srv;/home/titouan/catkin_ws/src/bota_driver/rokubimini_msgs/srv/FirmwareUpdateEthercat.srv;/home/titouan/catkin_ws/src/bota_driver/rokubimini_msgs/srv/FirmwareUpdateSerial.srv;/home/titouan/catkin_ws/src/bota_driver/rokubimini_msgs/srv/ResetWrench.srv")

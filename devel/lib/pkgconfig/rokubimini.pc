@@ -1,0 +1,8 @@
+prefix=/home/titouan/catkin_ws/devel
+
+Name: rokubimini
+Description: Description of rokubimini
+Version: 0.6.1
+Cflags: -I/home/titouan/catkin_ws/src/bota_driver/rokubimini/include -I/usr/include/eigen3
+Libs: -L${prefix}/lib -lrokubimini
+Requires: roscpp sensor_msgs geometry_msgs

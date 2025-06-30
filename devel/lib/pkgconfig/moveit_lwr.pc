@@ -1,0 +1,8 @@
+prefix=/home/titouan/catkin_ws/devel
+
+Name: moveit_lwr
+Description: Description of moveit_lwr
+Version: 0.3.0
+Cflags: 
+Libs: -L${prefix}/lib 
+Requires: 

@@ -1,0 +1,8 @@
+prefix=/home/titouan/catkin_ws/devel
+
+Name: industrial_robot_status_interface
+Description: Description of industrial_robot_status_interface
+Version: 0.1.2
+Cflags: -I/home/titouan/catkin_ws/src/industrial_robot_status_controller/industrial_robot_status_interface/include
+Libs: -L${prefix}/lib 
+Requires: hardware_interface

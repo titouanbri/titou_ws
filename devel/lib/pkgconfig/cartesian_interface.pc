@@ -1,0 +1,8 @@
+prefix=/home/titouan/catkin_ws/devel
+
+Name: cartesian_interface
+Description: Description of cartesian_interface
+Version: 0.1.7
+Cflags: -I/home/titouan/catkin_ws/src/Universal_Robots_ROS_controllers_cartesian/cartesian_interface/include
+Libs: -L${prefix}/lib 
+Requires: geometry_msgs hardware_interface roscpp

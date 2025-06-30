@@ -1,0 +1,24 @@
+#IncludeRegexLine: ^[ 	]*[#%][ 	]*(include|import)[ 	]*[<"]([^">]+)([">])
+
+#IncludeRegexScan: ^.*$
+
+#IncludeRegexComplain: ^$
+
+#IncludeRegexTransform: 
+
+/home/titouan/catkin_ws/src/bota_driver/bota_node/bota_signal_handler/include/bota_signal_handler/SignalHandler.hpp
+csignal
+-
+functional
+-
+list
+-
+map
+-
+mutex
+-
+
+/home/titouan/catkin_ws/src/bota_driver/bota_node/bota_signal_handler/src/SignalHandler.cpp
+bota_signal_handler/SignalHandler.hpp
+/home/titouan/catkin_ws/src/bota_driver/bota_node/bota_signal_handler/src/bota_signal_handler/SignalHandler.hpp
+

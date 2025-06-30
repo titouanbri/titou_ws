@@ -1,0 +1,6 @@
+# CMake generated Testfile for 
+# Source directory: /home/titouan/catkin_ws/src/universal_robot/force_sensor_node
+# Build directory: /home/titouan/catkin_ws/build/universal_robot/force_sensor_node
+# 
+# This file includes the relevant testing commands required for 
+# testing this directory and lists subdirectories to be tested as well.

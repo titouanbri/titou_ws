@@ -1,0 +1,8 @@
+prefix=/home/titouan/catkin_ws/install
+
+Name: ur_gazebo
+Description: Description of ur_gazebo
+Version: 1.4.0
+Cflags: 
+Libs: -L${prefix}/lib 
+Requires: 
