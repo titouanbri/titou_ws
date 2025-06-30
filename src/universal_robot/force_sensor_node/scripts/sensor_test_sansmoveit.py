@@ -71,8 +71,22 @@ class admittance_control(object):
         self.kdl_chain = chain
         self.kdl_jnt_to_jac_solver = PyKDL.ChainJntToJacSolver(chain)
 
+
+        # --- NOUVEAU : solveur FK pour récupérer la position réelle
+        self.kdl_fk_solver = PyKDL.ChainFkSolverPos_recursive(chain)
+
         self.correction = R.from_euler('z', -np.pi / 2)  #correction constante pour le capteur
         self.cg_history = deque(maxlen=100)  # Moyenne glissante sur 10 valeurs pour le centre de gravité 
+
+        
+        self.joint_frames = [     #nom des repères des joints
+        'base_link',
+        'shoulder_link',
+        'forearm_link',
+        'wrist_1_link',
+        'wrist_2_link',
+        'wrist_3_link',
+         ]
 
 
 
@@ -126,6 +140,36 @@ class admittance_control(object):
         except rospy.ServiceException as e:
             rospy.logerr(f"Service call failed: {e}")
             return False
+
+
+    def get_joint_positions(self,joint_frame):
+        
+        
+        try:
+            # lookup_transform(source, target, time, timeout)
+            tf_stamped = self.tf_buffer.lookup_transform(
+                self.base_frame,    # repère absolu
+                joint_frame,              # repère de l’articulation
+                rospy.Time(0),
+                rospy.Duration(0.1)
+            )
+            t = tf_stamped.transform.translation
+            positions = np.array([t.x, t.y, t.z])
+        except Exception as e:
+            rospy.logwarn(f"Impossible d'obtenir {joint_frame} : {e}")
+        return positions
+
+
+    def safety(self):
+        limite_basse_wrist=0.15
+        limite_basse_elbow=0.20
+        wrist= self.get_joint_positions("wrist_1_link")[2] > limite_basse_wrist
+        elbow= self.get_joint_positions("forearm_link")[2] > limite_basse_elbow 
+        return (wrist and elbow)
+        
+
+
+
 
     def transform_wrench_to_frame_alamain(self,wrench_msg):
 
@@ -264,7 +308,7 @@ class admittance_control(object):
         
         M = 5; B = c*M; K = 0        # translation
         M_rot = 0.09; B_rot = c*M_rot ; K_rot = 0  # rotation
-        frequence=450 #Hz
+        frequence=950 #Hz
         dt =1/frequence
         max_jerk_cart = 0.3      #limiter l'acceleration
         max_jerk_rot = 0.2
@@ -272,7 +316,7 @@ class admittance_control(object):
         force_dead_zone_rot = 0.003
         F_alpha = 0.02  # filtre passe-bas exponentiel (proche de 0 = réponse lente mais beaucoup filtré)
         last_time=rospy.Time.now()
-        joint_velocity_smoothed = None  # pour initialiser
+        joint_velocity_smoothed = None  # pour iget_joint_positions("wrist_3_link")[2]>limite_bassenitialiser
         V_alpha = 0.06  # coefficient de lissage (plus petit = plus lisse)
 
     
@@ -285,6 +329,7 @@ class admittance_control(object):
         K_mat=np.array([K,K,K,K_rot,K_rot,K_rot])
         M_mat=np.array([M,M,M,M_rot,M_rot,M_rot])
         joint_names = ['shoulder_pan_joint', 'shoulder_lift_joint', 'elbow_joint', 'wrist_1_joint', 'wrist_2_joint', 'wrist_3_joint']
+        limite_basse = 0.30
 
         
 
@@ -300,7 +345,7 @@ class admittance_control(object):
         
 
 
-        while not rospy.is_shutdown():
+        while not rospy.is_shutdown() and self.safety():
 
             self.timer_init()
 
@@ -370,6 +415,23 @@ class admittance_control(object):
             for i, pos in enumerate(joint_values):
                 jnt_array[i] = pos
 
+
+            # 1bis. CALCUL DE LA POSE RÉELLE DE L'EFFECTEUR
+            fk_frame = PyKDL.Frame()
+            self.kdl_fk_solver.JntToCart(jnt_array, fk_frame)
+            # Translation
+            current_pos = np.array([fk_frame.p[0], fk_frame.p[1], fk_frame.p[2]])
+
+            # --- NOUVEAU : on récupère la quaternion KDL (x,y,z,w)
+            qx, qy, qz, qw = fk_frame.M.GetQuaternion()
+            # on convertit directement en vecteur de rotation
+            current_rot = R.from_quat([qx, qy, qz, qw]).as_rotvec()
+
+            x_k_real = np.hstack((current_pos, current_rot))
+
+
+        
+
             # # # # 2. Calculer la Jacobienne
             jacobian = PyKDL.Jacobian(len(joint_values))
             self.kdl_jnt_to_jac_solver.JntToJac(jnt_array, jacobian)
@@ -383,7 +445,10 @@ class admittance_control(object):
             a_k = (filtered_force - B_mat* v_k - K_mat * x_k) /M_mat
             # a_k[axis] = max(min(a_k[axis], max_jerk), -max_jerk)
             v_k += a_k * dt
-            x_k += v_k * dt
+            x_k = x_k_real   #sert à rien 
+            print(self.get_joint_positions("wrist_1_link"))
+           
+            # x_k += v_k * dt
             # v_k[axis] = max(min(v_k[axis], max_vel), -max_vel)
 
 
@@ -434,6 +499,14 @@ class admittance_control(object):
 
             self.timer_add("att")
             self.timer_info()
+
+
+        vel_msg= Float64MultiArray()
+        vel_msg.data=[0,0,0,0,0,0]
+
+        joint_vel_pub.publish(vel_msg)
+        
+        
 
 
 
