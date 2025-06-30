@@ -1,0 +1,33 @@
+Visualization Manager:
+  Class: ""
+  Displays:
+    - Alpha: 1
+      Cell Size: 1
+      Class: rviz/Grid
+      Color: 160; 160; 160
+      Enabled: true
+      Line Style: Lines
+      Name: Grid
+      Plane: XY
+      Plane Cell Count: 10
+      Reference Frame: <Fixed Frame>
+    - Class: rviz/RobotModel
+      Enabled: true
+      Name: Robot Model
+      Robot Description: robot_description
+      TF Prefix: ""
+  Enabled: true
+  Global Options:
+    Background Color: 48; 48; 48
+    Fixed Frame: world
+    Frame Rate: 30
+  Name: root
+  Tools:
+    - Class: rviz/Interact
+    - Class: rviz/MoveCamera
+    - Class: rviz/Select
+    - Class: rviz/FocusCamera
+    - Class: rviz/Measure
+    - Class: rviz/SetInitialPose
+    - Class: rviz/SetGoal
+  Value: true

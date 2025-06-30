@@ -1,0 +1,5 @@
+<launch>
+  <node name="controller_spawner" pkg="controller_manager" type="spawner"
+        args="cartesian_velocity_controller" />
+</launch>
+

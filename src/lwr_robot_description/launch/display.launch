@@ -1,0 +1,20 @@
+<launch>
+  <!-- Lancer Gazebo avec un monde vide -->
+  <include file="$(find gazebo_ros)/launch/empty_world.launch" />
+
+  <!-- Charger le modèle URDF (via xacro si besoin) -->
+  <param name="robot_description" command="$(find xacro)/xacro $(find lwr_robot_description)/lwr-robot.urdf" />
+
+  <!-- Robot State Publisher -->
+  <node name="robot_state_publisher" pkg="robot_state_publisher" type="robot_state_publisher" output="screen" />
+
+  <!-- Joint State Publisher GUI (si ton robot a des joints sans contrôleur) -->
+  <node name="joint_state_publisher_gui" pkg="joint_state_publisher_gui" type="joint_state_publisher_gui" />
+
+  <!-- Spawn du robot dans Gazebo -->
+  <node name="spawn_urdf" pkg="gazebo_ros" type="spawn_model"
+        args="-param robot_description -urdf -model mon_robot" output="screen" />
+
+  <!-- RViz (affichage du robot) -->
+  <node name="rviz" pkg="rviz" type="rviz" args="-d $(find lwr_robot_description)/rviz/config.rviz" required="true"/>
+</launch>

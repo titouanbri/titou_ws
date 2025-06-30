@@ -1,0 +1,15 @@
+<?xml version="1.0"?>
+<robot name="rg6_gripper" xmlns:xacro="http://ros.org/wiki/xacro">
+  <link name="rg6_base_link">
+    <visual>
+      <geometry>
+        <box size="0.06 0.06 0.12"/>
+      </geometry>
+      <origin xyz="0 0 0.06" rpy="0 0 0"/>
+      <material name="gray">
+        <color rgba="0.6 0.6 0.6 1"/>
+      </material>
+    </visual>
+  </link>
+</robot>
+

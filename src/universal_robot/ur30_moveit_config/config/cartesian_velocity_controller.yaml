@@ -1,0 +1,13 @@
+twist_controller:
+  type: "velocity_controllers/CartesianTwistController"
+  end_effector_link: "tool0"              # ou l’outil réel
+  root_link: "base_link"                  # ou "base" selon ton URDF
+  publish_rate: 125
+  gains:
+    x: {p: 1.0, i: 0.0, d: 0.0}
+    y: {p: 1.0, i: 0.0, d: 0.0}
+    z: {p: 1.0, i: 0.0, d: 0.0}
+    roll:  {p: 1.0, i: 0.0, d: 0.0}
+    pitch: {p: 1.0, i: 0.0, d: 0.0}
+    yaw:   {p: 1.0, i: 0.0, d: 0.0}
+

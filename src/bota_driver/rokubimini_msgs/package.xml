@@ -1,0 +1,21 @@
+<?xml version="1.0"?>
+
+<package format="2">
+
+  <name>rokubimini_msgs</name>
+  <version>0.6.1</version>
+  <description>ROS message and service definitions.</description>
+  
+  <license>Apache 2.0</license>
+  <url>http://wiki.ros.org/bota_driver</url>
+  <maintainer email="sw-support@botasys.com">Bota Systems AG</maintainer>
+  
+  <buildtool_depend>catkin</buildtool_depend>
+
+  <depend>message_generation</depend> 
+  <depend>message_runtime</depend>
+  <depend>geometry_msgs</depend>
+  <depend>sensor_msgs</depend>
+  <depend>std_msgs</depend>
+  
+</package>

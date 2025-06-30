@@ -1,0 +1,16 @@
+<?xml version="1.0"?>
+<launch>
+
+
+  <!-- <node name="publisher_ethercat" pkg="ethercat_pkg" type="launcher.py" output="screen" required="true" launch-prefix="sudo -E"/> -->
+
+  <node
+    name="publisher_ethercat"
+    pkg="ethercat_pkg"
+    type="publisher_ethercat.py"
+    output="screen"
+    args="_interface:=enxd037453fd6d2"
+    required="true"
+
+  />
+</launch>

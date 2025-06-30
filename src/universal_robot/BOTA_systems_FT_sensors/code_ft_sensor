@@ -1,0 +1,36 @@
+sudo pip install pysoem
+
+sudo python3 EtherCAT_interface_finder/find_ethernet_adapters.py
+
+sudo python3 EtherCAT_interface_finder/read_eeprom.py <adapter>
+
+sudo python3 EtherCAT_interface_finder/read_eeprom.py ens5
+
+-----
+
+sudo python3 simple_test_scripts/bota_ethercat_minimal_example.py <adapter>
+
+sudo python3 simple_test_scripts/bota_ethercat_minimal_example.py ens5
+
+-----
+
+
+cd ~/Desktop/ROBOTA-SUDOE_CollabAssistSys/ros2_ws/src/ft_sensors_manager/ft_sensors_manager
+sudo python3 ethercat_reader.py ens5 BFT-SENS-ECAT-M8 12001
+
+
+ros2 run ft_sensors_manager ft_sensor_sensone
+
+
+ros2 topic echo /sensone_sensor_data
+
+
+-----
+
+ros2 topic pub -1 /supervisor_status_data diagnostic_msgs/KeyValue '{key: "ft_sensors", value: "1"}'
+
+-----
+
+sudo python3 sensor_configuration_SDO_reader.py ens5
+
+

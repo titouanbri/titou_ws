@@ -1,0 +1,5 @@
+force_torque_filter:
+  sinc_filter_size: 128
+  chop_enable:      false
+  fir_disable:      true
+  fast_enable:      false

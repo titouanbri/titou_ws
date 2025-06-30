@@ -1,0 +1,20 @@
+<?xml version="1.0"?>
+
+
+<launch>
+    <arg name="robot_ip" value="192.168.3.200" />
+
+    <include file="$(find ur_robot_driver)/launch/ur30_bringup.launch">
+        <arg name="robot_ip" value="$(arg robot_ip)" />
+    </include>
+
+    <include file="$(find ur30_moveit_config)/launch/demoR.launch" />
+    
+
+    <!-- Lancement du nœud force sensor -->
+    <!-- <node name="force_sensor_publisher"
+          pkg="force_sensor_node"
+          type="force_sensor_publisher.py"
+          output="screen" /> -->
+</launch>
+

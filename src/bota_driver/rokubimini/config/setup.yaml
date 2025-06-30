@@ -1,0 +1,6 @@
+rokubiminis:
+  - name:              ft_sensor0             # nom logique du capteur
+    configuration_file: rokubimini_sensor.yaml # copy/paste du fichier eksister
+    product_code:       1                      # vérifier dans votre manuel
+    ethercat_bus:       eth0                   # l’interface réseau utilisée
+    ethercat_address:   1                      # l’adresse du slave EtherCAT

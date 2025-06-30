@@ -1,0 +1,9 @@
+sudo pip install pysoem
+
+sudo python3 find_ethernet_adapters.py
+
+sudo python3 read_eeprom.py <adapter>
+
+sudo python3 read_eeprom.py ens5
+
+
