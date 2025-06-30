@@ -49,6 +49,7 @@ class admittance_control(object):
         rospy.Subscriber('/force_sensor', WrenchStamped, self.force_callback)
         rospy.Subscriber("/joint_states", JointState, self.joint_state_callback)
 
+        listener = tf.TransformListener()
 
 
         self.last_R_mat_test=None
@@ -382,8 +383,16 @@ class admittance_control(object):
             a_k = (filtered_force - B_mat* v_k - K_mat * x_k) /M_mat
             # a_k[axis] = max(min(a_k[axis], max_jerk), -max_jerk)
             v_k += a_k * dt
-            x_k += v_k * dt
-            # v_k[axis] = max(min(v_k[axis], max_vel), -max_vel)
+            # x_k += v_k * dt
+            v_k[axis] = max(min(v_k[axis], max_vel), -max_vel)
+
+            #Permet d'avoir X_k avec le topic /join_states
+            # try:
+            #     (trans, rot) = listener.lookupTransform('/base_link', '/tool0', rospy.Time(0))
+            #     X_k = np.array(trans)  # X_k devient directement la position [x, y, z]
+            # except (tf.LookupException, tf.ConnectivityException, tf.ExtrapolationException):
+            #     rospy.logwarn("Transformation non disponible")
+            #     # Garde l'ancienne position X_k si erreur
 
 
             ee_vel = v_k
