@@ -455,7 +455,8 @@ def main():
         # input("============ Press `Enter` to start the admittance ...")
 
         #lancement du publisher du capteur
-        # subprocess.Popen(["rosrun", "force_sensor_node", "force_sensor_eth_publisher.py"])
+        # subprocess.Popen(["rosrun", "force_sensor_node", "force_sensor_publisher.py"])
+        subprocess.Popen(["rosrun", "force_sensor_node", "force_sensor_eth_publisher.py"])
 
         #switch controller au cas ou
         admittance.switch_controllers(['joint_group_vel_controller'], ['scaled_pos_joint_traj_controller'])

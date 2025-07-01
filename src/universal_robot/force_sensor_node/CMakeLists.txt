@@ -170,6 +170,7 @@ catkin_install_python(PROGRAMS
   scripts/sensor_test_sansmoveit.py
   scripts/sensor_test_gp.py
   scripts/force_sensor_publisher_gp.py
+  scripts/force_sensor_eth_publisher.py
   DESTINATION ${CATKIN_PACKAGE_BIN_DESTINATION}
 )
 
