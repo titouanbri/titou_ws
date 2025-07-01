@@ -1,0 +1,16 @@
+<?xml version="1.0"?>
+<launch>
+  <!-- Argument pour nom du capteur -->
+  <arg name="ft_sensor_a_name" default="ft_sensor0"/>
+
+  <!-- Lancement du bus EtherCAT avec le capteur -->
+  <include file="$(find rokubimini_ethercat)/launch/rokubimini_ethercat.launch">
+    <arg name="ft_sensor_a_name" value="$(arg ft_sensor_a_name)" />
+  </include>
+
+  <!-- Lancement du noeud de traitement et publication -->
+  <node name="force_sensor_eth_publisher" pkg="force_sensor_node"
+        type="force_sensor_eth_publisher.py" output="screen">
+    <param name="sensor_name" value="$(arg ft_sensor_a_name)"/>
+  </node>
+</launch>

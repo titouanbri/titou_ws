@@ -46,10 +46,8 @@ class admittance_control(object):
         self.force_data = None  # pour stocker la dernière donnée
         self.joint_state = None
 
-        rospy.Subscriber('/force_sensor', WrenchStamped, self.force_callback)
+        rospy.Subscriber('/force_sensor_eth', WrenchStamped, self.force_callback)
         rospy.Subscriber("/joint_states", JointState, self.joint_state_callback)
-
-        listener = tf.TransformListener()
 
 
         self.last_R_mat_test=None
@@ -154,7 +152,7 @@ class admittance_control(object):
             Rot_test = R.from_quat([q.x, q.y, q.z, q.w])
 
             # check pour la matrice 
-            R_mat_test = Rot_test.as_dcm()
+            R_mat_test = Rot_test.as_matrix()
 
             self.timer_add("truc louche")
 
@@ -200,7 +198,7 @@ class admittance_control(object):
             # Transformation (rotation uniquement)
             # force_trans = Rot.apply(force)
             # torque_trans = Rot.apply(torque_manche)
-            Rot_qui_fonctionne_inshallah=Rot.as_dcm()
+            Rot_qui_fonctionne_inshallah=Rot.as_matrix()
             force_trans = np.dot(Rot_qui_fonctionne_inshallah,force) 
             torque_trans = np.dot(Rot_qui_fonctionne_inshallah,torque_manche)
             
@@ -384,7 +382,7 @@ class admittance_control(object):
             # a_k[axis] = max(min(a_k[axis], max_jerk), -max_jerk)
             v_k += a_k * dt
             # x_k += v_k * dt
-            v_k[axis] = max(min(v_k[axis], max_vel), -max_vel)
+            # v_k[axis] = max(min(v_k[axis], max_vel), -max_vel)
 
             #Permet d'avoir X_k avec le topic /join_states
             # try:
@@ -449,7 +447,7 @@ def main():
     try:
         print("t'as pas le temps de lire de toute façon")
         os.system("pkill -f force_sensor_publisher_gp.py")
-        os.system("pkill -f force_sensor_publisher.py")
+        os.system("pkill -f force_sensor_eth_publisher.py")
 
         admittance=admittance_control()
 
@@ -457,7 +455,8 @@ def main():
         # input("============ Press `Enter` to start the admittance ...")
 
         #lancement du publisher du capteur
-        subprocess.Popen(["rosrun", "force_sensor_node", "force_sensor_publisher.py"])
+        # subprocess.Popen(["rosrun", "force_sensor_node", "force_sensor_publisher.py"])
+        subprocess.Popen(["rosrun", "force_sensor_node", "force_sensor_eth_publisher.py"])
 
         #switch controller au cas ou
         admittance.switch_controllers(['joint_group_vel_controller'], ['scaled_pos_joint_traj_controller'])
