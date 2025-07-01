@@ -162,10 +162,13 @@ class admittance_control(object):
 
     def safety(self):
         limite_basse_wrist=0.15
-        limite_basse_elbow=0.20
+        limite_basse_elbow=0.15
+        limite_mur=0
         wrist= self.get_joint_positions("wrist_1_link")[2] > limite_basse_wrist
-        elbow= self.get_joint_positions("forearm_link")[2] > limite_basse_elbow 
-        return (wrist and elbow)
+        elbow= self.get_joint_positions("forearm_link")[2] > limite_basse_elbow
+        elbow1= self.get_joint_positions("forearm_link")[0] > limite_mur 
+        wrist1= self.get_joint_positions("wrist_1_link")[0] > limite_mur
+        return (wrist and elbow and elbow1 and wrist1)
         
 
 
@@ -446,7 +449,7 @@ class admittance_control(object):
             # a_k[axis] = max(min(a_k[axis], max_jerk), -max_jerk)
             v_k += a_k * dt
             x_k = x_k_real   #sert à rien 
-            print(self.get_joint_positions("wrist_1_link"))
+            print(x_k_real)
            
             # x_k += v_k * dt
             # v_k[axis] = max(min(v_k[axis], max_vel), -max_vel)
@@ -500,10 +503,14 @@ class admittance_control(object):
             self.timer_add("att")
             self.timer_info()
 
+        values=np.array(vel_msg.data)
+        for _ in range (100) :
+            values= values/1.03               #apres une etude tres serieuse sur geogebra
+            vel_msg.data=values.tolist()
+            joint_vel_pub.publish(vel_msg)
+            rospy.sleep(0.0025)
 
-        vel_msg= Float64MultiArray()
         vel_msg.data=[0,0,0,0,0,0]
-
         joint_vel_pub.publish(vel_msg)
         
         
