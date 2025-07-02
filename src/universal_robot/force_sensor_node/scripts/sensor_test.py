@@ -5,8 +5,6 @@ import numpy as np
 import sys
 import copy
 import rospy
-import moveit_commander
-import moveit_msgs.msg
 import geometry_msgs.msg
 from ur_msgs.srv import SetIO  # <-- Add this line
 from geometry_msgs.msg import WrenchStamped  # exemple, à changer selon ton message
@@ -26,106 +24,24 @@ from urdf_parser_py.urdf import URDF
 import PyKDL
 from kdl_parser_py.urdf import treeFromUrdfModel
 import subprocess
+from std_msgs.msg import String
 import os
 
-try:
-    from math import pi, tau, dist, fabs, cos
-except:  # For Python 2 compatibility
-    from math import pi, fabs, cos, sqrt
-
-    tau = 2.0 * pi
-
-    def dist(p, q):
-        return sqrt(sum((p_i - q_i) ** 2.0 for p_i, q_i in zip(p, q)))
-
-
-from std_msgs.msg import String
-from moveit_commander.conversions import pose_to_list
 
 
 
-def all_close(goal, actual, tolerance):
-    """
-    Convenience method for testing if the values in two lists are within a tolerance of each other.
-    For Pose and PoseStamped inputs, the angle between the two quaternions is compared (the angle
-    between the identical orientations q and -q is calculated correctly).
-    @param: goal       A list of floats, a Pose or a PoseStamped
-    @param: actual     A list of floats, a Pose or a PoseStamped
-    @param: tolerance  A float
-    @returns: bool
-    """
-    if type(goal) is list:
-        for index in range(len(goal)):
-            if abs(actual[index] - goal[index]) > tolerance:
-                return False
-
-    elif type(goal) is geometry_msgs.msg.PoseStamped:
-        return all_close(goal.pose, actual.pose, tolerance)
-
-    elif type(goal) is geometry_msgs.msg.Pose:
-        x0, y0, z0, qx0, qy0, qz0, qw0 = pose_to_list(actual)
-        x1, y1, z1, qx1, qy1, qz1, qw1 = pose_to_list(goal)
-        # Euclidean distance
-        d = dist((x1, y1, z1), (x0, y0, z0))
-        # phi = angle between orientations
-        cos_phi_half = fabs(qx0 * qx1 + qy0 * qy1 + qz0 * qz1 + qw0 * qw1)
-        return d <= tolerance and cos_phi_half >= cos(tolerance / 2.0)
-
-    return True
+#test pour tester si ça 
 
 
-class MoveGroupPythonInterfaceTutorial(object):
-    """MoveGroupPythonInterfaceTutorial"""
 
+class admittance_control(object):
     def __init__(self):
-        super(MoveGroupPythonInterfaceTutorial, self).__init__()
-
-
-        moveit_commander.roscpp_initialize(sys.argv)
         rospy.init_node("sensor_test", anonymous=True)
 
-        
-        robot = moveit_commander.RobotCommander()
-
-        
-        scene = moveit_commander.PlanningSceneInterface()
-
-        
         group_name = "manipulator"
-        move_group = moveit_commander.MoveGroupCommander(group_name)
 
-        
-        display_trajectory_publisher = rospy.Publisher(
-            "/move_group/display_planned_path",
-            moveit_msgs.msg.DisplayTrajectory,
-            queue_size=20,
-        )
         self.rel_force_pub = rospy.Publisher('/rel_force', WrenchStamped, queue_size=1)
-
-
         
-        planning_frame = move_group.get_planning_frame()
-        # print("============ Planning frame: %s" % planning_frame)
-
-        tool0 = move_group.get_end_effector_link()
-        # print("============ End effector link: %s" % tool0)
-
-        group_names = robot.get_group_names()
-        # print("============ Available Planning Groups:", robot.get_group_names())
-
-        
-        # print("============ Printing robot state")
-        # print(robot.get_current_state())
-        # print("")
-        
-        self.box_name = ""
-        self.robot = robot
-        self.scene = scene
-        self.move_group = move_group
-        self.display_trajectory_publisher = display_trajectory_publisher
-        self.planning_frame = planning_frame
-        self.tool0 = tool0
-        self.group_names = group_names
         self.tf_buffer = tf2_ros.Buffer()
         self.tf_listener = tf2_ros.TransformListener(self.tf_buffer)
 
@@ -133,6 +49,7 @@ class MoveGroupPythonInterfaceTutorial(object):
         self.joint_state = None
 
         rospy.Subscriber('/force_sensor', WrenchStamped, self.force_callback)
+        rospy.Subscriber('/force_sensor_eth', WrenchStamped, self.force_callback_eth)
         rospy.Subscriber("/joint_states", JointState, self.joint_state_callback)
 
 
@@ -144,20 +61,37 @@ class MoveGroupPythonInterfaceTutorial(object):
         self.timer_name =[]
         self.timer_value =[]
 
+        #variable pour changer de robot
+        self.tool_frame="tool0"
+        self.base_frame="base_link"
+
         robot_description = rospy.get_param("/robot_description")
         robot = URDF.from_xml_string(robot_description)
         ok, tree = treeFromUrdfModel(robot)
-        chain = tree.getChain("base_link", "fake_gripper")  # adapte ces noms à ton robot
+        chain = tree.getChain("base_link", self.tool_frame)  # adapte ces noms à ton robot
 
         self.kdl_chain = chain
         self.kdl_jnt_to_jac_solver = PyKDL.ChainJntToJacSolver(chain)
 
 
-        self.correction = R.from_euler('z', -np.pi / 2)  #correction constante pour le capteur 
+        # --- NOUVEAU : solveur FK pour récupérer la position réelle
+        self.kdl_fk_solver = PyKDL.ChainFkSolverPos_recursive(chain)
+
+        self.correction = R.from_euler('z', -np.pi / 2)  #correction constante pour le capteur
+        self.cg_history = deque(maxlen=100)  # Moyenne glissante sur 10 valeurs pour le centre de gravité 
+
+        
+        self.joint_frames = [     #nom des repères des joints
+        'base_link',
+        'shoulder_link',
+        'forearm_link',
+        'wrist_1_link',
+        'wrist_2_link',
+        'wrist_3_link',
+         ]
 
 
 
-    
     def timer_init(self):
         # self.timer_name =["init"]
         # self.timer_value =[rospy.Time.now()]
@@ -178,36 +112,15 @@ class MoveGroupPythonInterfaceTutorial(object):
         # rospy.loginfo_throttle(0.1,"\n".join(sentence)+ f" \n temp total : {round(total_hz,2)} Hz")
         pass
 
-
     def force_callback(self, msg):
         self.force_data = msg
 
-
+    def force_callback_eth(self, msg):
+        self.force_data_eth = msg
 
     def joint_state_callback(self, msg):
         self.joint_state = msg
 
-    def go_to_pose_goal(self,a,b,c):
-        
-        move_group = self.move_group
-
-        pose_goal = geometry_msgs.msg.Pose()
-        pose_goal.orientation.x = 1.0
-        pose_goal.position.x = a
-        pose_goal.position.y = b
-        pose_goal.position.z = c
-
-        move_group.set_pose_target(pose_goal)
-
-        
-        success = move_group.go(wait=True)
-        move_group.stop()
-        move_group.clear_pose_targets()
-
-        
-        current_pose = self.move_group.get_current_pose().pose
-        return all_close(pose_goal, current_pose, 0.01)
-        
     def switch_controllers(self,start_list, stop_list):
         rospy.wait_for_service('/controller_manager/switch_controller')
         try:
@@ -234,12 +147,72 @@ class MoveGroupPythonInterfaceTutorial(object):
             return False
 
 
+    def get_joint_positions(self,joint_frame):
+        
+        
+        try:
+            # lookup_transform(source, target, time, timeout)
+            tf_stamped = self.tf_buffer.lookup_transform(
+                self.base_frame,    # repère absolu
+                joint_frame,              # repère de l’articulation
+                rospy.Time(0),
+                rospy.Duration(0.1)
+            )
+            t = tf_stamped.transform.translation
+            positions = np.array([t.x, t.y, t.z])
+        except Exception as e:
+            rospy.logwarn(f"Impossible d'obtenir {joint_frame} : {e}")
+        return positions
+
+
+    def safety(self):
+        limite_basse_wrist=0.15
+        limite_basse_elbow=0.15
+        limite_mur=-0.22
+        wrist= self.get_joint_positions("wrist_1_link")[2] > limite_basse_wrist
+        elbow= self.get_joint_positions("forearm_link")[2] > limite_basse_elbow
+        elbow1= self.get_joint_positions("forearm_link")[0] > limite_mur 
+        wrist1= self.get_joint_positions("wrist_1_link")[0] > limite_mur
+        return (wrist and elbow and elbow1 and wrist1)
+        
+    def In_Meat(self):
+        #utilisation de l'ethercat pour savoir si on est dans la viande
+        seuil = 3
+        data = np.array([
+            self.force_data_eth.wrench.force.x,
+            self.force_data_eth.wrench.force.y,
+            self.force_data_eth.wrench.force.z,
+            # self.force_data_eth.wrench.torque.x,
+            # self.force_data_eth.wrench.torque.y,
+            # self.force_data_eth.wrench.torque.z,
+        ])
+        norme=np.linalg.norm(data)
+        print(norme)
+        
+        return norme > seuil
+
+    def admittance_dyn(self):
+        data = np.array([
+            self.force_data_eth.wrench.force.x,
+            self.force_data_eth.wrench.force.y,
+            self.force_data_eth.wrench.force.z,
+            # self.force_data_eth.wrench.torque.x,
+            # self.force_data_eth.wrench.torque.y,
+            # self.force_data_eth.wrench.torque.z,
+        ])
+        norme=np.linalg.norm(data)
+        M=np.log(norme**2)+5
+        B=15*M
+        return None
+
+
+
     def transform_wrench_to_frame_alamain(self,wrench_msg):
 
         
         seuil_norme_q=0.1
-        tool_frame="fake_gripper"
-        base_frame="base_link"
+        tool_frame=self.tool_frame
+        base_frame=self.base_frame
 
        
 
@@ -310,12 +283,29 @@ class MoveGroupPythonInterfaceTutorial(object):
             Rot_qui_fonctionne_inshallah=Rot.as_dcm()
             force_trans = np.dot(Rot_qui_fonctionne_inshallah,force) 
             torque_trans = np.dot(Rot_qui_fonctionne_inshallah,torque_manche)
+            
 
-            self.timer_add("transf de la f")
+
+            #estimer centre gravité
+            # F_norm_sq = np.dot(force_trans, force_trans)
+
+            # if F_norm_sq > 1e-6:  # éviter la division par zéro
+            #     cg_vector = np.cross(force_trans, torque_trans) / F_norm_sq
+            #     self.cg_history.append(cg_vector)
+            #     cg_avg = np.mean(self.cg_history, axis=0)
+            #     self.cg_estimate = cg_avg
+            #     rospy.loginfo_throttle(1.0, f"CG (filtré): {cg_avg}")
+
+                
+            # else:
+            #     rospy.logwarn_throttle(1.0, "Norme force trop faible pour estimer le CG")
+
+
+            
             # Crée un nouveau message WrenchStamped
             new_wrench = WrenchStamped()
             new_wrench.header.stamp = wrench_msg.header.stamp
-            new_wrench.header.frame_id = tool_frame
+            new_wrench.header.frame_id = self.tool_frame
             new_wrench.wrench.force.x = force_trans[0]
             new_wrench.wrench.force.y = force_trans[1]
             new_wrench.wrench.force.z = force_trans[2]
@@ -345,27 +335,29 @@ class MoveGroupPythonInterfaceTutorial(object):
             rospy.logwarn("Erreur transformation explicite : %s", str(e))
             return None
 
-
-
     def admittance_openloop(self) :
 
         rospy.loginfo("Starting full-body admittance control (6D: position + orientation via torque)...")
 
         # Admittance parameters
-        c=12
-        
+        c=15
         M = 3; B = c*M; K = 0        # translation
-        M_rot = 0.07; B_rot = c*M_rot ; K_rot = 0  # rotation
-        frequence=450 #Hz
+        M_rot = 0.06; B_rot = c*M_rot ; K_rot = 0  # rotation
+
+        #adimttance paramters in meat IM
+        M_IM=8 ; M_rot_IM=0.11
+
+
+        frequence=950 #Hz
         dt =1/frequence
         max_jerk_cart = 0.3      #limiter l'acceleration
         max_jerk_rot = 0.2
-        force_dead_zone_cart = 0.08  # eviter de publier pour rien
-        force_dead_zone_rot = 0.005
+        force_dead_zone_cart = 0.05  # eviter de publier pour rien
+        force_dead_zone_rot = 0.003
         F_alpha = 0.02  # filtre passe-bas exponentiel (proche de 0 = réponse lente mais beaucoup filtré)
         last_time=rospy.Time.now()
-        joint_velocity_smoothed = None  # pour initialiser
-        V_alpha = 0.1  # coefficient de lissage (plus petit = plus lisse)
+        joint_velocity_smoothed = None  # pour iget_joint_positions("wrist_3_link")[2]>limite_bassenitialiser
+        V_alpha = 0.06  # coefficient de lissage (plus petit = plus lisse)
 
     
         filtered_force = np.zeros(6)
@@ -376,7 +368,9 @@ class MoveGroupPythonInterfaceTutorial(object):
         B_mat=np.array([B,B,B,B_rot,B_rot,B_rot])
         K_mat=np.array([K,K,K,K_rot,K_rot,K_rot])
         M_mat=np.array([M,M,M,M_rot,M_rot,M_rot])
-        joint_names = self.move_group.get_active_joints()
+        M_mat_IM=np.array([M_IM,M_IM,M_IM,M_rot_IM,M_rot_IM,M_rot_IM])
+        B_mat_IM=c*M_mat_IM
+        joint_names = ['shoulder_pan_joint', 'shoulder_lift_joint', 'elbow_joint', 'wrist_1_joint', 'wrist_2_joint', 'wrist_3_joint']
 
         
 
@@ -392,7 +386,7 @@ class MoveGroupPythonInterfaceTutorial(object):
         
 
 
-        while not rospy.is_shutdown():
+        while not rospy.is_shutdown() and self.safety():
 
             self.timer_init()
 
@@ -422,18 +416,18 @@ class MoveGroupPythonInterfaceTutorial(object):
                 continue
 
             
-
-
+            #recup force (from force_sensor_publisher)
             fx = wrench_global.wrench.force.x
             fy = wrench_global.wrench.force.y
             fz = wrench_global.wrench.force.z
             tx = wrench_global.wrench.torque.x
             ty = wrench_global.wrench.torque.y
             tz = wrench_global.wrench.torque.z
-
             current_force = np.array([fx,fy,fz,tx,ty,tz])
 
-
+            #recup pos joint
+            joint_values = [self.joint_state.position[self.joint_state.name.index(jn)] for jn in joint_names]  #arange l'ordre des joint
+            joint_values_np = np.array(joint_values)
 
 
             #filtre passe bas exponentiel
@@ -444,9 +438,8 @@ class MoveGroupPythonInterfaceTutorial(object):
             filtered_force = smoothed_rel
 
 
-            # Admittance dynamics
 
-            # test nouvelle zone morte
+            # test zone morte
             if np.linalg.norm(filtered_force[:3]) < force_dead_zone_cart :
                     filtered_force[0] = 0.0
                     filtered_force[1] = 0.0
@@ -458,148 +451,143 @@ class MoveGroupPythonInterfaceTutorial(object):
             
             
             
-         
-            a_k = (filtered_force - B_mat* v_k - K_mat * x_k) /M_mat
+            # 1. Remplir KDL.JntArray
+            jnt_array = PyKDL.JntArray(len(joint_values))
+            for i, pos in enumerate(joint_values):
+                jnt_array[i] = pos
+
+
+            # 1bis. CALCUL DE LA POSE RÉELLE DE L'EFFECTEUR
+            fk_frame = PyKDL.Frame()
+            self.kdl_fk_solver.JntToCart(jnt_array, fk_frame)
+            # Translation
+            current_pos = np.array([fk_frame.p[0], fk_frame.p[1], fk_frame.p[2]])
+
+            # --- NOUVEAU : on récupère la quaternion KDL (x,y,z,w)
+            qx, qy, qz, qw = fk_frame.M.GetQuaternion()
+            # on convertit directement en vecteur de rotation
+            current_rot = R.from_quat([qx, qy, qz, qw]).as_rotvec()
+
+            x_k_real = np.hstack((current_pos, current_rot))
+
+
+        
+
+            # # # # 2. Calculer la Jacobienne
+            jacobian = PyKDL.Jacobian(len(joint_values))
+            self.kdl_jnt_to_jac_solver.JntToJac(jnt_array, jacobian)
+
+            # # # # 3. Convertir en NumPy
+            jacobian = np.array([[jacobian[i, j] for j in range(jacobian.columns())] for i in range(6)])
+
+
+            if self.In_Meat() :
+                M_dyn=M_mat_IM
+                B_dyn=B_mat_IM
+                print("on nez dan la viande")
+            else :
+                M_dyn=M_mat
+                B_dyn=B_mat
+                
+
+            # Admittance dynamics
+            a_k = (filtered_force - B_dyn* v_k - K_mat * x_k) /M_dyn      # K vaut 0 donc raf
             # a_k[axis] = max(min(a_k[axis], max_jerk), -max_jerk)
             v_k += a_k * dt
-            x_k += v_k * dt
+            x_k = x_k_real   #sert à rien 
+            # print(x_k_real)
+           
+            # x_k += v_k * dt
             # v_k[axis] = max(min(v_k[axis], max_vel), -max_vel)
 
+
+            ee_vel = v_k
+
+            joint_velocities = np.linalg.pinv(jacobian).dot(ee_vel)
+
+            
+            
+
+            # publication pour tracer pas mal de truc finalement 
+            # norme_F=np.linalg.norm(np.array([filtered_force['x'],filtered_force['y'],filtered_force['z'],filtered_force['rx'], filtered_force['ry'], filtered_force['rz']]))
+            # norme_F0=np.linalg.norm(np.array([zero_force['x'],zero_force['y'],zero_force['z'],zero_force['rx'], zero_force['ry'], zero_force['rz']]))
+
+            # msg_filt = WrenchStamped()
+            # msg_filt.header.stamp = rospy.Time.now()
+            # msg_filt.header.frame_id = "base_link"  # ou le frame que tu utilises
+            # msg_filt.wrench.force = Vector3(1/smoothed_dt, 0, filtered_force['z'])
+            # msg_filt.wrench.torque = Vector3(filtered_force['rx'], filtered_force['ry'], filtered_force['rz'])
+            # filtered_force_pub.publish(msg_filt)
+
+            
+
+
+            if joint_velocity_smoothed is None:
+                joint_velocity_smoothed = joint_velocities
+            else:
+                joint_velocity_smoothed = V_alpha * joint_velocities + (1 - V_alpha) * joint_velocity_smoothed
 
 
             
 
-            try:
-                #acquisition pos joint
-                # joint_values = self.move_group.get_current_joint_values()
-                joint_values = [self.joint_state.position[self.joint_state.name.index(jn)] for jn in joint_names]  #arange l'ordre des joint
-                #calle cul de la jaques au bienne
-                jacobian = self.move_group.get_jacobian_matrix(joint_values)  
-                # # Détection du repère de la Jacobienne
-                # jacobian_frame = self.move_group.get_pose_reference_frame()
-
-                # 1. Remplir KDL.JntArray
-                # jnt_array = PyKDL.JntArray(len(joint_values))
-                # for i, pos in enumerate(joint_values):
-                #     jnt_array[i] = pos
-
-                # # # # 2. Calculer la Jacobienne
-                # jacobian = PyKDL.Jacobian(len(joint_values))
-                # self.kdl_jnt_to_jac_solver.JntToJac(jnt_array, jacobian)
-
-                # # # # 3. Convertir en NumPy
-                # jacobian = np.array([[jacobian[i, j] for j in range(jacobian.columns())] for i in range(6)])
+            
+            vel_msg= Float64MultiArray()
+            vel_msg.data= joint_velocity_smoothed.tolist()
+            joint_vel_pub.publish(vel_msg)
 
 
-                # Génère le vecteur vitesse dans base_link
-                v_lin_base = v_k[:3]
-                v_rot_base = v_k[3:]
-
-
-
-                # Transforme les vitesses si nécessaire
-                # if jacobian_frame != "base_link":
-                #     transform = self.tf_buffer.lookup_transform(jacobian_frame, "base_link", rospy.Time(0), rospy.Duration(0.1))
-                #     q = transform.transform.rotation
-                #     rotation = R.from_quat([q.x, q.y, q.z, q.w])
-                #     v_lin = rotation.apply(v_lin_base)
-                #     v_rot = rotation.apply(v_rot_base)
-                #     print("lllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllll")
-
-                # else:
-                v_lin = v_lin_base
-                v_rot = v_rot_base
-
-                # ee_vel = np.concatenate([v_lin, v_rot])
-                ee_vel = v_k
-
-                joint_velocities = np.linalg.pinv(jacobian).dot(ee_vel)
-
-                
-                
-
-                # publication pour tracer pas mal de truc finalement 
-                # norme_F=np.linalg.norm(np.array([filtered_force['x'],filtered_force['y'],filtered_force['z'],filtered_force['rx'], filtered_force['ry'], filtered_force['rz']]))
-                # norme_F0=np.linalg.norm(np.array([zero_force['x'],zero_force['y'],zero_force['z'],zero_force['rx'], zero_force['ry'], zero_force['rz']]))
-
-                # msg_filt = WrenchStamped()
-                # msg_filt.header.stamp = rospy.Time.now()
-                # msg_filt.header.frame_id = "base_link"  # ou le frame que tu utilises
-                # msg_filt.wrench.force = Vector3(1/smoothed_dt, 0, filtered_force['z'])
-                # msg_filt.wrench.torque = Vector3(filtered_force['rx'], filtered_force['ry'], filtered_force['rz'])
-                # filtered_force_pub.publish(msg_filt)
-
-                
-
-
-                if joint_velocity_smoothed is None:
-                    joint_velocity_smoothed = joint_velocities
-                else:
-                    joint_velocity_smoothed = V_alpha * joint_velocities + (1 - V_alpha) * joint_velocity_smoothed
-
-
-                
-
-                
-                vel_msg= Float64MultiArray()
-                vel_msg.data= joint_velocity_smoothed.tolist()
-                joint_vel_pub.publish(vel_msg)
-
-
-                self.timer_add("fin")
+            self.timer_add("fin")
 
                 
                
 
 
 
-            except Exception as e:
-                rospy.logwarn("Erreur dans le calcul ou la publication : %s", str(e))
     
             rate.sleep()
 
             self.timer_add("att")
             self.timer_info()
 
-          
+        values=np.array(vel_msg.data)
+        for _ in range (100) :
+            values= values/1.03               #apres une etude tres serieuse sur geogebra
+            vel_msg.data=values.tolist()
+            joint_vel_pub.publish(vel_msg)
+            rospy.sleep(0.0025)
 
-    
+        vel_msg.data=[0,0,0,0,0,0]
+        joint_vel_pub.publish(vel_msg)
+        
+        
+
 
 def main():
     try:
         print("t'as pas le temps de lire de toute façon")
+        os.system("pkill -f force_sensor_publisher_gp.py")
         os.system("pkill -f force_sensor_publisher.py")
-      
-        tutorial = MoveGroupPythonInterfaceTutorial()
+        os.system("pkill -f force_sensor_eth_publisher.py")
 
-        # input("============ Press `Enter` to the initial pose ...")
 
-        tutorial.switch_controllers(['scaled_pos_joint_traj_controller'], ['joint_group_vel_controller'])
-        tutorial.go_to_pose_goal(-1,0.60,0.3)
+        admittance=admittance_control()
+
+
+        # input("============ Press `Enter` to start the admittance ...")
 
         #lancement du publisher du capteur
         subprocess.Popen(["rosrun", "force_sensor_node", "force_sensor_publisher.py"])
+        subprocess.Popen(["rosrun", "force_sensor_node", "force_sensor_eth_publisher.py"])
 
 
-        input("============ Press `Enter` to start the admittance ...")
-
-        tutorial.switch_controllers(['joint_group_vel_controller'], ['scaled_pos_joint_traj_controller'])
-
-        tutorial.admittance_openloop()
+        #switch controller au cas ou
+        admittance.switch_controllers(['joint_group_vel_controller'], ['scaled_pos_joint_traj_controller'])
 
 
-  
+        #lancement admittance
+        admittance.admittance_openloop()
 
-        # input("============ Press `Enter` to tout faire Cartesian path ...")
-        # cartesian_plan, fraction = tutorial.plan_cartesian_path(0,0,-0.2)     
-        # tutorial.display_trajectory(cartesian_plan)
-        # tutorial.execute_plan(cartesian_plan)
-        
-        # input("============ Press `Enter` to close la mano ...")
-        # tutorial.close_gripper()
-
-
-
+        #print finito pour printer finito
         print("finito")
         
     except rospy.ROSInterruptException:
@@ -607,7 +595,10 @@ def main():
     except KeyboardInterrupt:
         return
 
-
 if __name__ == "__main__":
     main()
 
+
+          
+
+    

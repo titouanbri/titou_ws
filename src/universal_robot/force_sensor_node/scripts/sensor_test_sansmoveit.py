@@ -518,7 +518,6 @@ class admittance_control(object):
         
 
 
-
 def main():
     try:
         print("t'as pas le temps de lire de toute façon")
