@@ -17,11 +17,15 @@
 - chat gpt pour les erreurs 
 
 - echo "/opt/ros/noetic/lib" | sudo tee /etc/ld.so.conf.d/ros-noetic.conf
-- sudo ldconfig
-- important 
+- sudo ldconfig 
 
 
 - changer le nom du port 
 - changer nom du capteur dans le launch 
 ## Commande finale pour lancer l'acquisition ( se lance avec setup.launch )
 - roslaunch rokubimini_ethercat rokubimini_ethercat.launch
+
+## Lancement
+
+- commande pour lancer driver UR + driver ethercat ( à modifier avec les infos du bon robot) : roslaunch force_sensor_node setup.launch
+- commande pour lancer l'admittance : rosrun force_sensor_node sensor_test.py 
