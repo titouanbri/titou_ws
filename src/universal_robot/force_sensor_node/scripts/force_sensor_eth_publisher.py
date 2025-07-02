@@ -124,7 +124,7 @@ class ForceSensorProcessor:
 
             if len(self.zero_force_buffer) >= self.nb_pour_moyenne_zero_force:
                 self.zero_force = np.mean(self.zero_force_buffer, axis=0)
-                rospy.logwarn("Offset calculé : %s", self.zero_force)
+                rospy.logwarn("ethercat sensor OK")
             return  # Ne publie rien avant le calcul du zéro
 
         # Soustraction de l'offset

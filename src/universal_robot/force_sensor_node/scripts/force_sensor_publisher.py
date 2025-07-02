@@ -129,7 +129,7 @@ if __name__ == "__main__":
         np.mean([f[axis] for f in zero_force_buffer])
         for axis in range(6)
     ]
-    rospy.logwarn("Offset calculé sur beaucoup de mesures : %s", zero_force)
+    rospy.logwarn("serial sensor OK")
     
 
     try:
