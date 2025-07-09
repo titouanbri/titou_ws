@@ -104,6 +104,8 @@ if __name__ == "__main__":
     rospy.loginfo("Collecte des %d premières mesures pour calcul du offset...", nb_pour_moyenne_zero_force)
     while len(zero_force_buffer) < nb_pour_moyenne_zero_force:
         forces = sensor.read_frame()
+        rospy.loginfo(forces)
+
         if forces is not None:
             zero_force_buffer.append(forces)
 
