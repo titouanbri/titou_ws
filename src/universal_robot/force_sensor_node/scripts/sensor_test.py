@@ -26,11 +26,20 @@ from kdl_parser_py.urdf import treeFromUrdfModel
 import subprocess
 from std_msgs.msg import String
 import os
+import serial
+import time
 
 
-
-
-#test pour tester si ça 
+#initialisation de la teensy 
+PORT = '/dev/ttyACM0'
+BAUD = 9600
+try:
+    ser = serial.Serial(PORT, BAUD, timeout=0)
+    print(f"Connecté à {PORT} à {BAUD} bauds.")
+    time.sleep(2)  # laisse la ligne série se stabiliser
+except serial.SerialException as e:
+    print(f"Erreur d'ouverture du port série : {e}")
+    
 
 
 
@@ -89,6 +98,13 @@ class admittance_control(object):
         'wrist_2_link',
         'wrist_3_link',
          ]
+        
+        self.button=True
+
+        self.v_k = np.zeros(6)
+        self.x_k = np.zeros(6)
+        self.a_k = np.zeros(6)
+
 
 
 
@@ -96,6 +112,7 @@ class admittance_control(object):
         # self.timer_name =["init"]
         # self.timer_value =[rospy.Time.now()]
         pass
+        
     
     def timer_add(self, name):
         # self.timer_name.append(name)
@@ -166,9 +183,9 @@ class admittance_control(object):
 
 
     def safety(self):
-        limite_basse_wrist=0.15
+        limite_basse_wrist=0.20
         limite_basse_elbow=0.15
-        limite_mur=-0.22
+        limite_mur=-0.10
         wrist= self.get_joint_positions("wrist_1_link")[2] > limite_basse_wrist
         elbow= self.get_joint_positions("forearm_link")[2] > limite_basse_elbow
         elbow1= self.get_joint_positions("forearm_link")[0] > limite_mur 
@@ -187,7 +204,6 @@ class admittance_control(object):
             # self.force_data_eth.wrench.torque.z,
         ])
         norme=np.linalg.norm(data)
-        print(norme)
         
         return norme > seuil
 
@@ -205,8 +221,6 @@ class admittance_control(object):
         B=15*M
         return None
 
-
-
     def transform_wrench_to_frame_alamain(self,wrench_msg):
 
         
@@ -223,7 +237,7 @@ class admittance_control(object):
                 rospy.Time(0),  #wrench_msg.header.stamp
                 rospy.Duration(0.01)
             )
-            self.timer_add("TF pour F")
+            
             
 
             # Récupère la rotation
@@ -236,7 +250,7 @@ class admittance_control(object):
             # check pour la matrice 
             R_mat_test = Rot_test.as_dcm()
 
-            self.timer_add("truc louche")
+            
 
             if self.last_R_mat_test is not None:
                 diff = np.linalg.norm(R_mat_test - self.last_R_mat_test)
@@ -257,7 +271,6 @@ class admittance_control(object):
                 self.last_Rot=Rot
                 self.last_R_mat_test=R_mat_test
 
-            self.timer_add("test q")
 
     
 
@@ -335,20 +348,30 @@ class admittance_control(object):
             rospy.logwarn("Erreur transformation explicite : %s", str(e))
             return None
 
+    def PRESS(self):
+        line = ser.readline().decode('utf-8', errors='ignore').strip()
+        if line == "PRESS":
+            # on bascule l'état
+            self.button = not self.button
+            print(f"→ Nouvel état : {'ACTIF' if self.button else 'INACTIF'}")
+            
+        return self.button
+        
+
     def admittance_openloop(self) :
 
         rospy.loginfo("Starting full-body admittance control (6D: position + orientation via torque)...")
 
         # Admittance parameters
         c=15
-        M = 3; B = c*M; K = 0        # translation
-        M_rot = 0.06; B_rot = c*M_rot ; K_rot = 0  # rotation
+        M = 3.5; B = c*M; K = 0        # translation
+        M_rot = 0.07; B_rot = c*M_rot ; K_rot = 0  # rotation
 
         #adimttance paramters in meat IM
-        M_IM=8 ; M_rot_IM=0.11
+        M_IM=10 ; M_rot_IM=0.12
 
 
-        frequence=950 #Hz
+        frequence=400 #Hz
         dt =1/frequence
         max_jerk_cart = 0.3      #limiter l'acceleration
         max_jerk_rot = 0.2
@@ -361,8 +384,6 @@ class admittance_control(object):
 
     
         filtered_force = np.zeros(6)
-        v_k = np.zeros(6)
-        x_k = np.zeros(6)
         smoothed_rel = np.zeros(6)
 
         B_mat=np.array([B,B,B,B_rot,B_rot,B_rot])
@@ -371,6 +392,8 @@ class admittance_control(object):
         M_mat_IM=np.array([M_IM,M_IM,M_IM,M_rot_IM,M_rot_IM,M_rot_IM])
         B_mat_IM=c*M_mat_IM
         joint_names = ['shoulder_pan_joint', 'shoulder_lift_joint', 'elbow_joint', 'wrist_1_joint', 'wrist_2_joint', 'wrist_3_joint']
+        vel_msg= Float64MultiArray()
+        vel_msg.data=[0,0,0,0,0,0]
 
         
 
@@ -387,9 +410,27 @@ class admittance_control(object):
 
 
         while not rospy.is_shutdown() and self.safety():
-
             self.timer_init()
 
+            #boutton
+            if  not self.PRESS():
+                values=np.array(vel_msg.data)
+                for _ in range (100) :
+                    values= values/1.03               #apres une etude tres serieuse sur geogebra
+                    vel_msg.data=values.tolist()
+                    joint_vel_pub.publish(vel_msg)
+                    rospy.sleep(0.0025)
+                    
+
+                vel_msg.data=[0,0,0,0,0,0]
+                joint_vel_pub.publish(vel_msg)
+                self.v_k = np.zeros(6)
+                self.x_k = np.zeros(6)
+                self.a_k = np.zeros(6)
+                joint_velocity_smoothed = None  
+                filtered_force = np.zeros(6)
+                smoothed_rel = np.zeros(6)
+                continue
             # current_time=rospy.Time.now()
             # dt = (current_time - last_time).to_sec()
             # last_time = current_time
@@ -491,20 +532,18 @@ class admittance_control(object):
                 
 
             # Admittance dynamics
-            a_k = (filtered_force - B_dyn* v_k - K_mat * x_k) /M_dyn      # K vaut 0 donc raf
+            self.a_k = (filtered_force - B_dyn* self.v_k - K_mat * self.x_k) /M_dyn      # K vaut 0 donc raf
             # a_k[axis] = max(min(a_k[axis], max_jerk), -max_jerk)
-            v_k += a_k * dt
-            x_k = x_k_real   #sert à rien 
+            self.v_k += self.a_k * dt
+            self.x_k = x_k_real   #sert à rien 
             # print(x_k_real)
            
             # x_k += v_k * dt
             # v_k[axis] = max(min(v_k[axis], max_vel), -max_vel)
 
 
-            ee_vel = v_k
-
+            ee_vel = self.v_k
             joint_velocities = np.linalg.pinv(jacobian).dot(ee_vel)
-
             
             
 
@@ -531,19 +570,17 @@ class admittance_control(object):
             
 
             
-            vel_msg= Float64MultiArray()
             vel_msg.data= joint_velocity_smoothed.tolist()
             joint_vel_pub.publish(vel_msg)
 
 
-            self.timer_add("fin")
 
                 
                
 
 
 
-    
+            self.timer_add("fin")
             rate.sleep()
 
             self.timer_add("att")
@@ -555,16 +592,15 @@ class admittance_control(object):
             vel_msg.data=values.tolist()
             joint_vel_pub.publish(vel_msg)
             rospy.sleep(0.0025)
+            print("zbi")
 
         vel_msg.data=[0,0,0,0,0,0]
         joint_vel_pub.publish(vel_msg)
         
         
-
-
 def main():
     try:
-        print("t'as pas le temps de lire de toute façon")
+        print("initialisation du node")
         os.system("pkill -f force_sensor_publisher_gp.py")
         os.system("pkill -f force_sensor_publisher.py")
         os.system("pkill -f force_sensor_eth_publisher.py")
