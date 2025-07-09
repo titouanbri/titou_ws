@@ -6,8 +6,8 @@ import sys
 import copy
 import rospy
 import geometry_msgs.msg
-from ur_msgs.srv import SetIO  # <-- Add this line
-from geometry_msgs.msg import WrenchStamped  # exemple, à changer selon ton message
+from ur_msgs.srv import SetIO  
+from geometry_msgs.msg import WrenchStamped  
 from std_msgs.msg import Float64MultiArray
 from collections import deque
 import tf.transformations as tf_trans
@@ -36,7 +36,7 @@ BAUD = 9600
 try:
     ser = serial.Serial(PORT, BAUD, timeout=0)
     print(f"Connecté à {PORT} à {BAUD} bauds.")
-    time.sleep(2)  # laisse la ligne série se stabiliser
+    time.sleep(2)  
 except serial.SerialException as e:
     print(f"Erreur d'ouverture du port série : {e}")
     
@@ -77,13 +77,13 @@ class admittance_control(object):
         robot_description = rospy.get_param("/robot_description")
         robot = URDF.from_xml_string(robot_description)
         ok, tree = treeFromUrdfModel(robot)
-        chain = tree.getChain("base_link", self.tool_frame)  # adapte ces noms à ton robot
+        chain = tree.getChain("base_link", self.tool_frame)  
 
         self.kdl_chain = chain
         self.kdl_jnt_to_jac_solver = PyKDL.ChainJntToJacSolver(chain)
 
 
-        # --- NOUVEAU : solveur FK pour récupérer la position réelle
+        
         self.kdl_fk_solver = PyKDL.ChainFkSolverPos_recursive(chain)
 
         self.correction = R.from_euler('z', -np.pi / 2)  #correction constante pour le capteur
@@ -107,18 +107,21 @@ class admittance_control(object):
 
 
 
+    # les fonctions timer servent à afficher le temps que met le code exécuter une certaine partie du code
 
+    #initialise, à mettre au début du code
     def timer_init(self):
         # self.timer_name =["init"]
         # self.timer_value =[rospy.Time.now()]
         pass
         
-    
+    #chaque add est un affichage, et calcule par rapport au add précédent (init compris)
     def timer_add(self, name):
         # self.timer_name.append(name)
         # self.timer_value.append(rospy.Time.now())
         pass
-    
+
+    #a mettre à la fin 
     def timer_info(self):
         # total_time = self.timer_value[-1] - self.timer_value[0]
         # total_hz = 1.0/total_time.to_sec()
@@ -138,6 +141,10 @@ class admittance_control(object):
     def joint_state_callback(self, msg):
         self.joint_state = msg
 
+
+
+
+    #fonction pour s'assurer que les bons controllers sont lancés, sinon les lance
     def switch_controllers(self,start_list, stop_list):
         rospy.wait_for_service('/controller_manager/switch_controller')
         try:
@@ -168,7 +175,6 @@ class admittance_control(object):
         
         
         try:
-            # lookup_transform(source, target, time, timeout)
             tf_stamped = self.tf_buffer.lookup_transform(
                 self.base_frame,    # repère absolu
                 joint_frame,              # repère de l’articulation
@@ -181,7 +187,7 @@ class admittance_control(object):
             rospy.logwarn(f"Impossible d'obtenir {joint_frame} : {e}")
         return positions
 
-
+    #fonction de sécurité (spatiale)
     def safety(self):
         limite_basse_wrist=0.20
         limite_basse_elbow=0.15
@@ -191,7 +197,9 @@ class admittance_control(object):
         elbow1= self.get_joint_positions("forearm_link")[0] > limite_mur 
         wrist1= self.get_joint_positions("wrist_1_link")[0] > limite_mur
         return (wrist and elbow and elbow1 and wrist1)
-        
+
+
+    #utilise le capteur ethercat pour savoir si l'utilisateur est entrain de couper ou non (pas obligatoire, mettre return False pour l'ignorer)   
     def In_Meat(self):
         #utilisation de l'ethercat pour savoir si on est dans la viande
         seuil = 3
@@ -207,20 +215,7 @@ class admittance_control(object):
         
         return norme > seuil
 
-    def admittance_dyn(self):
-        data = np.array([
-            self.force_data_eth.wrench.force.x,
-            self.force_data_eth.wrench.force.y,
-            self.force_data_eth.wrench.force.z,
-            # self.force_data_eth.wrench.torque.x,
-            # self.force_data_eth.wrench.torque.y,
-            # self.force_data_eth.wrench.torque.z,
-        ])
-        norme=np.linalg.norm(data)
-        M=np.log(norme**2)+5
-        B=15*M
-        return None
-
+    #renvoie les valeurs du capteur serie dans la base fixe ("base_link")
     def transform_wrench_to_frame_alamain(self,wrench_msg):
 
         
@@ -234,7 +229,7 @@ class admittance_control(object):
             transform = self.tf_buffer.lookup_transform(
                 base_frame,
                 tool_frame,
-                rospy.Time(0),  #wrench_msg.header.stamp
+                rospy.Time(0),  
                 rospy.Duration(0.01)
             )
             
@@ -242,12 +237,9 @@ class admittance_control(object):
 
             # Récupère la rotation
             q = transform.transform.rotation
-            # rospy.loginfo("Quaternion TF : [%.4f %.4f %.4f %.4f]", q.x, q.y, q.z, q.w)
 
             # à tester si il est pas cassé
             Rot_test = R.from_quat([q.x, q.y, q.z, q.w])
-
-            # check pour la matrice 
             R_mat_test = Rot_test.as_dcm()
 
             
@@ -255,7 +247,7 @@ class admittance_control(object):
             if self.last_R_mat_test is not None:
                 diff = np.linalg.norm(R_mat_test - self.last_R_mat_test)
                 
-                if diff <= seuil_norme_q:  # ← seuil pour les normes à tej
+                if diff <= seuil_norme_q:  # ← seuil pour les normes (si différence entre 2 consécutives trop élevé : on prends pas en compte car cassé)
                     Rot=Rot_test
                     Rot = Rot*self.correction 
                     self.last_Rot=Rot
@@ -265,7 +257,6 @@ class admittance_control(object):
                     Rot=self.last_Rot
                     R_mat_test=self.last_R_mat_test
 
-                    # rospy.logwarn(" Changement brutal de la matrice de rotation détecté (diff = %.4f)", diff)
             else :
                 Rot=Rot_test*self.correction
                 self.last_Rot=Rot
@@ -290,30 +281,10 @@ class admittance_control(object):
             d=np.array([0,0.05,0.07])
             torque_manche=torque + np.cross(d,force)
 
-            # Transformation (rotation uniquement)
-            # force_trans = Rot.apply(force)
-            # torque_trans = Rot.apply(torque_manche)
-            Rot_qui_fonctionne_inshallah=Rot.as_dcm()
-            force_trans = np.dot(Rot_qui_fonctionne_inshallah,force) 
-            torque_trans = np.dot(Rot_qui_fonctionne_inshallah,torque_manche)
+            Rot_qui_fonctionne=Rot.as_dcm()
+            force_trans = np.dot(Rot_qui_fonctionne,force) 
+            torque_trans = np.dot(Rot_qui_fonctionne,torque_manche)
             
-
-
-            #estimer centre gravité
-            # F_norm_sq = np.dot(force_trans, force_trans)
-
-            # if F_norm_sq > 1e-6:  # éviter la division par zéro
-            #     cg_vector = np.cross(force_trans, torque_trans) / F_norm_sq
-            #     self.cg_history.append(cg_vector)
-            #     cg_avg = np.mean(self.cg_history, axis=0)
-            #     self.cg_estimate = cg_avg
-            #     rospy.loginfo_throttle(1.0, f"CG (filtré): {cg_avg}")
-
-                
-            # else:
-            #     rospy.logwarn_throttle(1.0, "Norme force trop faible pour estimer le CG")
-
-
             
             # Crée un nouveau message WrenchStamped
             new_wrench = WrenchStamped()
@@ -326,21 +297,6 @@ class admittance_control(object):
             new_wrench.wrench.torque.y =torque_trans[1]
             new_wrench.wrench.torque.z =torque_trans[2]
 
-            # publication force réelle pour plot
-
-            # norme_F=np.linalg.norm(np.array([force_trans[0],force_trans[1],force_trans[2],torque_trans[0],torque_trans[1],torque_trans[2]]))
-            # msg_rel = WrenchStamped()
-            # msg_rel.header.stamp = rospy.Time.now()
-            # msg_rel.header.frame_id = "base_link"  # ou le frame que tu utilises
-            # msg_rel.wrench.force = Vector3(norme_F, force_trans[1], force_trans[2])
-            # msg_rel.wrench.torque = Vector3(torque_trans[0], torque_trans[1], torque_trans[2])
-            # self.rel_force_pub.publish(msg_rel)
-
-            
-
-
-
-
             return new_wrench
         
 
@@ -348,6 +304,8 @@ class admittance_control(object):
             rospy.logwarn("Erreur transformation explicite : %s", str(e))
             return None
 
+
+    #boutton
     def PRESS(self):
         line = ser.readline().decode('utf-8', errors='ignore').strip()
         if line == "PRESS":
@@ -373,13 +331,10 @@ class admittance_control(object):
 
         frequence=400 #Hz
         dt =1/frequence
-        max_jerk_cart = 0.3      #limiter l'acceleration
-        max_jerk_rot = 0.2
         force_dead_zone_cart = 0.05  # eviter de publier pour rien
         force_dead_zone_rot = 0.003
         F_alpha = 0.02  # filtre passe-bas exponentiel (proche de 0 = réponse lente mais beaucoup filtré)
-        last_time=rospy.Time.now()
-        joint_velocity_smoothed = None  # pour iget_joint_positions("wrist_3_link")[2]>limite_bassenitialiser
+        joint_velocity_smoothed = None  
         V_alpha = 0.06  # coefficient de lissage (plus petit = plus lisse)
 
     
@@ -416,7 +371,7 @@ class admittance_control(object):
             if  not self.PRESS():
                 values=np.array(vel_msg.data)
                 for _ in range (100) :
-                    values= values/1.03               #apres une etude tres serieuse sur geogebra
+                    values= values/1.03              
                     vel_msg.data=values.tolist()
                     joint_vel_pub.publish(vel_msg)
                     rospy.sleep(0.0025)
@@ -431,16 +386,10 @@ class admittance_control(object):
                 filtered_force = np.zeros(6)
                 smoothed_rel = np.zeros(6)
                 continue
-            # current_time=rospy.Time.now()
-            # dt = (current_time - last_time).to_sec()
-            # last_time = current_time
-
-
-           
 
             if self.force_data is None:
                 rate.sleep()
-                continue
+                continue # attend une valeur
 
             if self.joint_state is None:
                 rate.sleep()
@@ -504,7 +453,7 @@ class admittance_control(object):
             # Translation
             current_pos = np.array([fk_frame.p[0], fk_frame.p[1], fk_frame.p[2]])
 
-            # --- NOUVEAU : on récupère la quaternion KDL (x,y,z,w)
+            # on récupère la quaternion KDL (x,y,z,w)
             qx, qy, qz, qw = fk_frame.M.GetQuaternion()
             # on convertit directement en vecteur de rotation
             current_rot = R.from_quat([qx, qy, qz, qw]).as_rotvec()
@@ -514,11 +463,11 @@ class admittance_control(object):
 
         
 
-            # # # # 2. Calculer la Jacobienne
+            # 2. Calculer la Jacobienne
             jacobian = PyKDL.Jacobian(len(joint_values))
             self.kdl_jnt_to_jac_solver.JntToJac(jnt_array, jacobian)
 
-            # # # # 3. Convertir en NumPy
+            # 3. Convertir en NumPy
             jacobian = np.array([[jacobian[i, j] for j in range(jacobian.columns())] for i in range(6)])
 
 
@@ -532,35 +481,15 @@ class admittance_control(object):
                 
 
             # Admittance dynamics
-            self.a_k = (filtered_force - B_dyn* self.v_k - K_mat * self.x_k) /M_dyn      # K vaut 0 donc raf
-            # a_k[axis] = max(min(a_k[axis], max_jerk), -max_jerk)
+            self.a_k = (filtered_force - B_dyn* self.v_k - K_mat * self.x_k) /M_dyn      
             self.v_k += self.a_k * dt
-            self.x_k = x_k_real   #sert à rien 
-            # print(x_k_real)
-           
-            # x_k += v_k * dt
-            # v_k[axis] = max(min(v_k[axis], max_vel), -max_vel)
+            self.x_k = x_k_real   #sert à rien car k=0 dans le modèle, à modifier selon besoin 
 
 
             ee_vel = self.v_k
             joint_velocities = np.linalg.pinv(jacobian).dot(ee_vel)
-            
-            
 
-            # publication pour tracer pas mal de truc finalement 
-            # norme_F=np.linalg.norm(np.array([filtered_force['x'],filtered_force['y'],filtered_force['z'],filtered_force['rx'], filtered_force['ry'], filtered_force['rz']]))
-            # norme_F0=np.linalg.norm(np.array([zero_force['x'],zero_force['y'],zero_force['z'],zero_force['rx'], zero_force['ry'], zero_force['rz']]))
-
-            # msg_filt = WrenchStamped()
-            # msg_filt.header.stamp = rospy.Time.now()
-            # msg_filt.header.frame_id = "base_link"  # ou le frame que tu utilises
-            # msg_filt.wrench.force = Vector3(1/smoothed_dt, 0, filtered_force['z'])
-            # msg_filt.wrench.torque = Vector3(filtered_force['rx'], filtered_force['ry'], filtered_force['rz'])
-            # filtered_force_pub.publish(msg_filt)
-
-            
-
-
+            #filtre exp sur la vitesse à publier
             if joint_velocity_smoothed is None:
                 joint_velocity_smoothed = joint_velocities
             else:
@@ -588,11 +517,11 @@ class admittance_control(object):
 
         values=np.array(vel_msg.data)
         for _ in range (100) :
-            values= values/1.03               #apres une etude tres serieuse sur geogebra
+            values= values/1.03               
             vel_msg.data=values.tolist()
             joint_vel_pub.publish(vel_msg)
             rospy.sleep(0.0025)
-            print("zbi")
+            
 
         vel_msg.data=[0,0,0,0,0,0]
         joint_vel_pub.publish(vel_msg)
@@ -601,15 +530,11 @@ class admittance_control(object):
 def main():
     try:
         print("initialisation du node")
-        os.system("pkill -f force_sensor_publisher_gp.py")
         os.system("pkill -f force_sensor_publisher.py")
         os.system("pkill -f force_sensor_eth_publisher.py")
 
 
         admittance=admittance_control()
-
-
-        # input("============ Press `Enter` to start the admittance ...")
 
         #lancement du publisher du capteur
         subprocess.Popen(["rosrun", "force_sensor_node", "force_sensor_publisher.py"])
@@ -623,8 +548,7 @@ def main():
         #lancement admittance
         admittance.admittance_openloop()
 
-        #print finito pour printer finito
-        print("finito")
+        print("fin de l'admittance")
         
     except rospy.ROSInterruptException:
         return
