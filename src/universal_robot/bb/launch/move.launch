@@ -5,7 +5,7 @@
 
     <!-- Lancement du publisher -->
     <node name="sensor_test_numpy"
-          pkg="force_sensor_node"
+          pkg="bb"
           type="sensor_test_numpy.py"
           output="screen" />
 
@@ -14,7 +14,7 @@
 
     <!-- Lancement du publisher -->
     <node name="force_sensor_publisher"
-          pkg="force_sensor_node"
+          pkg="bb"
           type="force_sensor_publisher.py"
           output="screen" />
 </launch>

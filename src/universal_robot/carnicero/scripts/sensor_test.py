@@ -537,8 +537,8 @@ def main():
         admittance=admittance_control()
 
         #lancement du publisher du capteur
-        subprocess.Popen(["rosrun", "force_sensor_node", "force_sensor_publisher.py"])
-        subprocess.Popen(["rosrun", "force_sensor_node", "force_sensor_eth_publisher.py"])
+        subprocess.Popen(["rosrun", "carnicero", "force_sensor_publisher.py"])
+        subprocess.Popen(["rosrun", "carnicero", "force_sensor_eth_publisher.py"])
 
 
         #switch controller au cas ou
