@@ -55,6 +55,8 @@ class BotaForceTorqueSensorComm:
         crc_received = struct.unpack('<H', raw[-2:])[0]
         crc_calculated = self.crc16_x25(payload)
 
+
+
         if crc_received != crc_calculated:
             return None
 
@@ -78,6 +80,8 @@ if __name__ == "__main__":
 
     sensor = BotaForceTorqueSensorComm()
 
+
+
     frequence=500
     dt=1/frequence
     rospy.init_node("force_sensor_publisher")
@@ -92,14 +96,6 @@ if __name__ == "__main__":
 
 
 
-    # plt.ion()
-    # fig, ax = plt.subplots()
-    # lines = [ax.plot([], [], label=axis)[0] for axis in axes]
-    # ax.set_xlim(0, nb_pour_moyenne_zero_force)
-    # ax.set_ylim(-10, 10)  # Ajuste selon ton capteur
-    # ax.legend()
-    # force_history = [[] for _ in range(6)]
-    # x_data = []
 
     rospy.loginfo("Collecte des %d premières mesures pour calcul du offset...", nb_pour_moyenne_zero_force)
     while len(zero_force_buffer) < nb_pour_moyenne_zero_force:
@@ -110,17 +106,6 @@ if __name__ == "__main__":
             zero_force_buffer.append(forces)
 
 
-            #tracer
-            # for i in range(6):
-            #     force_history[i].append(forces[i])
-            # x_data.append(len(zero_force_buffer))
-
-            # for i, line in enumerate(lines):
-            #     line.set_data(x_data, force_history[i])
-
-            # ax.relim()
-            # ax.autoscale_view()
-            # plt.pause(0.001)
 
         rospy.sleep(0.05)  # éviter de saturer le port série
 
