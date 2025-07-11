@@ -21,6 +21,7 @@ from scipy.spatial.transform import Rotation as R
 from scipy.signal import butter, lfilter_zi, lfilter, filtfilt
 from geometry_msgs.msg import WrenchStamped, Wrench, Vector3
 from controller_manager_msgs.srv import SwitchController
+from trajectory_msgs.msg import JointTrajectoryPoint
 
 try:
     from math import pi, tau, dist, fabs, cos
@@ -122,7 +123,6 @@ class MoveGroupPythonInterfaceTutorial(object):
         self.tf_listener = tf2_ros.TransformListener(self.tf_buffer)
 
         self.force_data = None  # pour stocker la dernière donnée
-        rospy.Subscriber('/force_sensor', WrenchStamped, self.force_callback)
 
 
 
@@ -130,8 +130,6 @@ class MoveGroupPythonInterfaceTutorial(object):
         self.last_Rot=None
 
 
-    def force_callback(self, msg):
-        self.force_data = msg
 
     # def go_to_joint_state(self):
     #     move_group = self.move_group
@@ -152,15 +150,20 @@ class MoveGroupPythonInterfaceTutorial(object):
     #     current_joints = move_group.get_current_joint_values()
     #     return all_close(joint_goal, current_joints, 0.01)
 
-    def go_to_pose_goal(self,a,b,c):
+    def go_to_pose_goal(self,x,y,z,i,j,k,w):
 
 
         move_group = self.move_group
         pose_goal = geometry_msgs.msg.Pose()
-        pose_goal.orientation.x = 1.0
-        pose_goal.position.x = a
-        pose_goal.position.y = b
-        pose_goal.position.z = c
+
+        pose_goal.orientation.x = i
+        pose_goal.orientation.y = j
+        pose_goal.orientation.z = k
+        pose_goal.orientation.w = w
+
+        pose_goal.position.x = x
+        pose_goal.position.y = y
+        pose_goal.position.z = z
 
         move_group.set_pose_target(pose_goal)
 
@@ -264,6 +267,30 @@ class MoveGroupPythonInterfaceTutorial(object):
             rospy.logerr(f"Service call failed: {e}")
             return False
 
+
+
+    def open_gripper(self):
+        """Open the RG2 gripper using digital output."""
+        rospy.loginfo("Opening the gripper...")
+        rospy.wait_for_service('/ur_hardware_interface/set_io')
+        try:
+            set_io = rospy.ServiceProxy('/ur_hardware_interface/set_io', SetIO)
+            response = set_io(1, 1, 1)  # Set digital output 1 to 0 (open gripper)
+            rospy.loginfo(f"Gripper opened: {response}")
+        except rospy.ServiceException as e:
+            rospy.logerr(f"Failed to open gripper: {e}")
+
+    def close_gripper(self):
+        """Close the RG2 gripper using digital output."""
+        rospy.loginfo("Closing the gripper...")
+        rospy.wait_for_service('/ur_hardware_interface/set_io')
+        try:
+            set_io = rospy.ServiceProxy('/ur_hardware_interface/set_io', SetIO)
+            response = set_io(1, 1, 0)  # Set digital output 1 to 1 (close gripper)
+            rospy.loginfo(f"Gripper closed: {response}")
+        except rospy.ServiceException as e:
+            rospy.logerr(f"Failed to close gripper: {e}")
+
 def main():
     try:
         print("t'as pas le temps de lire de toute façon")
@@ -272,9 +299,13 @@ def main():
 
         input("============ Press `Enter` to the initial pose ...")
         # tutorial.switch_controllers(['scaled_pos_joint_traj_controller'], ['joint_group_vel_controller'])
-        tutorial.go_to_pose_goal(0.2,0.2,0.2)
+        tutorial.go_to_pose_goal(0.4,0.4,0.5,1,0,0,0)
 
+        # input("============ Press `Enter` to razey les poils ...")
+        # tutorial.open_gripper()
 
+        # input("============ Press `Enter` to razey les poils ...")
+        # tutorial.close_gripper()
   
 
         # input("============ Press `Enter` to tout faire Cartesian path ...")
