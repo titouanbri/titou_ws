@@ -8,7 +8,7 @@ Panels:
         - /MotionPlanning1/Planning Request1
         - /RobotModel1
       Splitter Ratio: 0.5175438523292542
-    Tree Height: 346
+    Tree Height: 336
   - Class: rviz/Help
     Name: Help
   - Class: rviz/Views
@@ -86,6 +86,11 @@ Visualization Manager:
             Show Axes: false
             Show Trail: false
             Value: true
+          fake_gripper:
+            Alpha: 1
+            Show Axes: false
+            Show Trail: false
+            Value: true
           flange:
             Alpha: 1
             Show Axes: false
@@ -148,7 +153,7 @@ Visualization Manager:
         Interactive Marker Size: 0
         Joint Violation Color: 255; 0; 255
         Planning Group: manipulator
-        Query Goal State: true
+        Query Goal State: false
         Query Start State: false
         Show Workspace: false
         Start State Alpha: 1
@@ -179,6 +184,11 @@ Visualization Manager:
             Show Axes: false
             Show Trail: false
           base_link_inertia:
+            Alpha: 1
+            Show Axes: false
+            Show Trail: false
+            Value: true
+          fake_gripper:
             Alpha: 1
             Show Axes: false
             Show Trail: false
@@ -249,6 +259,11 @@ Visualization Manager:
           Show Axes: false
           Show Trail: false
           Value: true
+        fake_gripper:
+          Alpha: 1
+          Show Axes: false
+          Show Trail: false
+          Value: true
         flange:
           Alpha: 1
           Show Axes: false
@@ -309,7 +324,7 @@ Visualization Manager:
   Views:
     Current:
       Class: rviz/XYOrbit
-      Distance: 2.996500015258789
+      Distance: 1.224596381187439
       Enable Stereo Rendering:
         Stereo Eye Separation: 0.05999999865889549
         Stereo Focal Distance: 1
@@ -325,9 +340,9 @@ Visualization Manager:
       Invert Z Axis: false
       Name: Current View
       Near Clip Distance: 0.009999999776482582
-      Pitch: 0.41479742527008057
+      Pitch: 0.38479745388031006
       Target Frame: base_link
-      Yaw: 0.301760196685791
+      Yaw: 0.8517598509788513
     Saved: ~
 Window Geometry:
   Displays:
@@ -341,9 +356,9 @@ Window Geometry:
     collapsed: false
   MotionPlanning - Trajectory Slider:
     collapsed: false
-  QMainWindow State: 000000ff00000000fd0000000100000000000001f3000003b9fc0200000007fb000000100044006900730070006c006100790073010000003d00000197000000c900fffffffb0000000800480065006c00700000000342000000bb0000006e00fffffffb0000000a0056006900650077007300000003b0000000b0000000a400fffffffb0000000c00430061006d00650072006100000002ff000001610000000000000000fb0000001e004d006f00740069006f006e00200050006c0061006e006e0069006e00670100000374000001890000000000000000fb00000044004d006f00740069006f006e0050006c0061006e006e0069006e00670020002d0020005400720061006a006500630074006f0072007900200053006c00690064006500720000000000ffffffff0000001600000016fb0000001c004d006f00740069006f006e0050006c0061006e006e0069006e006701000001da0000021c0000017d00ffffff00000587000003b900000001000000020000000100000002fc0000000100000002000000010000000a0054006f006f006c00730100000000ffffffff0000000000000000
+  QMainWindow State: 000000ff00000000fd0000000100000000000001f3000003b9fc0200000007fb000000100044006900730070006c006100790073010000003d0000018d000000c900fffffffb0000000800480065006c00700000000342000000bb0000006e00fffffffb0000000a0056006900650077007300000003b0000000b0000000a400fffffffb0000000c00430061006d00650072006100000002ff000001610000000000000000fb0000001e004d006f00740069006f006e00200050006c0061006e006e0069006e00670100000374000001890000000000000000fb00000044004d006f00740069006f006e0050006c0061006e006e0069006e00670020002d0020005400720061006a006500630074006f0072007900200053006c00690064006500720000000000ffffffff0000001600000016fb0000001c004d006f00740069006f006e0050006c0061006e006e0069006e006701000001d0000002260000017d00ffffff00000587000003b900000001000000020000000100000002fc0000000100000002000000010000000a0054006f006f006c00730100000000ffffffff0000000000000000
   Views:
     collapsed: false
   Width: 1920
-  X: 1920
+  X: 0
   Y: 0
