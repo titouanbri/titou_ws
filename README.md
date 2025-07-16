@@ -33,3 +33,6 @@
 
 ## chemin des fichiers utilisés :
 ~/catkin_ws/src/universal_robot/force_sensor_node
+
+## mail du goat, du "broyeur de pins", "foudroyeur d'ur30" :
+titouan.briancon@sigma-clermont.fr
