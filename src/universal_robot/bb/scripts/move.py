@@ -342,7 +342,7 @@ class MoveGroupPythonInterfaceTutorial(object):
         rospy.wait_for_service('/ur_hardware_interface/set_io')
         try:
             set_io = rospy.ServiceProxy('/ur_hardware_interface/set_io', SetIO)
-            response = set_io(1, 1, 1)  # Set digital output 1 to 0 (open gripper)
+            response = set_io(1, 1, 0)  # Set digital output 1 to 0 (open gripper)
             rospy.loginfo(f"Gripper opened: {response}")
         except rospy.ServiceException as e:
             rospy.logerr(f"Failed to open gripper: {e}")
@@ -353,7 +353,7 @@ class MoveGroupPythonInterfaceTutorial(object):
         rospy.wait_for_service('/ur_hardware_interface/set_io')
         try:
             set_io = rospy.ServiceProxy('/ur_hardware_interface/set_io', SetIO)
-            response = set_io(1, 1, 0)  # Set digital output 1 to 1 (close gripper)
+            response = set_io(1, 1, 1)  # Set digital output 1 to 1 (close gripper)
             rospy.loginfo(f"Gripper closed: {response}")
         except rospy.ServiceException as e:
             rospy.logerr(f"Failed to close gripper: {e}")
@@ -502,20 +502,24 @@ def main():
       
         tutorial = MoveGroupPythonInterfaceTutorial()
         # tutorial.switch_controllers(['scaled_pos_joint_traj_controller'], ['joint_group_vel_controller'])
+        # input("============ TEST")
+        input("============ Press `Enter` to start the movement ...")
+        tutorial.traj([0.579,0.39,0.272],[-1,0,0.25],0.25,0.40,50)
+        
         input("============ Press `Enter` open the gripper ...")
-        # tutorial.open_gripper()
+        tutorial.open_gripper()
         
         input("============ Press `Enter` to go to the head ...")
-        tutorial.go_to_pose_goal(0.4,0.4,0.45,0,np.pi,0)
-        tutorial.go_to_pose_goal(0.4,0.4,0.35,0,np.pi,0)
+        tutorial.go_to_pose_goal(0.3,0.4,0.45,0,np.pi,0)
+        tutorial.go_to_pose_goal(0.3,0.4,0.35,0,np.pi,0)
 
         input("============ Press `Enter` close the gripper ...")
-        # tutorial.close_gripper()
-
+        tutorial.close_gripper()
+        rospy.sleep(3)
+        tutorial.go_to_pose_goal(0.3,0.4,0.45,0,np.pi,0)
 
         input("============ Press `Enter` to start the movement ...")
-        tutorial.go_to_pose_goal(0.4,0.4,0.45,0,np.pi,0)
-        tutorial.traj([0.50,0.40,0.27],[-1,0,0],0.25,0.35,20)
+        tutorial.traj([0.52,0.40,0.275],[-1,0,0.25],0.2,0.35,50)
       
         print("finito")
         
