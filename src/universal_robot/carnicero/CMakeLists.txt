@@ -166,6 +166,7 @@ include_directories(
 catkin_install_python(PROGRAMS
   scripts/force_sensor_publisher.py
   scripts/sensor_test.py
+  scripts/sensor_test_planC.py
   scripts/force_sensor_eth_publisher.py
   DESTINATION ${CATKIN_PACKAGE_BIN_DESTINATION}
 )

@@ -403,13 +403,13 @@ class MoveGroupPythonInterfaceTutorial(object):
 
     def traj(self, C: Tuple[float, float, float], axis: Tuple[float, float, float], angle: float, height: float, nb_point: int):
         """
-        Mouvement conique paramétrable en hauteur : le bout du gripper pointe toujours vers C
-        et décrit un cercle formant un cône d'axe et de hauteur spécifiés.
-        :param C: point fixe (x, y, z) vers lequel pointe l'outil (sommet du cône)
-        :param axis: vecteur (vx, vy, vz) définissant l'axe central du cône (direction de la hauteur)
-        :param angle: demi-ouverture du cône en radians
-        :param height: hauteur du cône (distance sommet -> plan circulaire)
-        :param nb_point: nombre de points de la trajectoire circulaire
+        balayge conique
+
+        C : point fixe durant le mouvement (pointe du cône)
+        axis : axe du cône
+        angle : demi angle du cône
+        height : hauteur du cône
+        nb_point : nombre de points de la trajectoire
         """
         # Numérisation des paramètres
         C = np.array(C, dtype=float)
@@ -516,31 +516,7 @@ def main():
         input("============ Press `Enter` to start the movement ...")
         tutorial.go_to_pose_goal(0.4,0.4,0.45,0,np.pi,0)
         tutorial.traj([0.50,0.40,0.27],[-1,0,0],0.25,0.35,20)
-        # tutorial.go_to_pose_goal(0.45,0.45,0.5,0.3,3.14/2,0)
-        # input("============ Press `Enter` to the initial pose ...")
-        # tutorial.go_to_pose_goal(0.45,0.45,0.5,0,3.14/2-0.3,0)
-        # input("============ Press `Enter` to the initial pose ...")
-        # tutorial.go_to_pose_goal(0.45,0.45,0.5,-0.3,3.14/2,0)
-        # input("============ Press `Enter` to the initial pose ...")
-        # tutorial.go_to_pose_goal(0.45,0.45,0.5,0,3.14/2+0.3,0)
-        
-        # input("============ Press `Enter` to razey les poils ...")
-        # tutorial.open_gripper()
-
-        # input("============ Press `Enter` to razey les poils ...")
-        # tutorial.close_gripper()
-  
-
-        # input("============ Press `Enter` to tout faire Cartesian path ...")
-        # cartesian_plan, fraction = tutorial.plan_cartesian_path(0,0,-0.2)     
-        # tutorial.display_trajectory(cartesian_plan)
-        # tutorial.execute_plan(cartesian_plan)
-        
-        # input("============ Press `Enter` to close la mano ...")
-        # tutorial.close_gripper()
-
-
-
+      
         print("finito")
         
     except rospy.ROSInterruptException:
