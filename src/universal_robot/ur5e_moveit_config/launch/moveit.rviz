@@ -7,6 +7,8 @@ Panels:
         - /MotionPlanning1
         - /MotionPlanning1/Planning Request1
         - /RobotModel1
+        - /TF1
+        - /TF1/Frames1
       Splitter Ratio: 0.5175438523292542
     Tree Height: 336
   - Class: rviz/Help
@@ -308,6 +310,63 @@ Visualization Manager:
       Update Interval: 0
       Value: true
       Visual Enabled: true
+    - Class: rviz/TF
+      Enabled: true
+      Filter (blacklist): ""
+      Filter (whitelist): ""
+      Frame Timeout: 15
+      Frames:
+        All Enabled: false
+        base:
+          Value: false
+        base_link:
+          Value: true
+        base_link_inertia:
+          Value: false
+        fake_gripper:
+          Value: false
+        flange:
+          Value: false
+        forearm_link:
+          Value: false
+        shoulder_link:
+          Value: false
+        tool0:
+          Value: false
+        tool0_controller:
+          Value: false
+        upper_arm_link:
+          Value: false
+        wrist_1_link:
+          Value: false
+        wrist_2_link:
+          Value: false
+        wrist_3_link:
+          Value: false
+      Marker Alpha: 1
+      Marker Scale: 1
+      Name: TF
+      Show Arrows: true
+      Show Axes: true
+      Show Names: true
+      Tree:
+        base_link:
+          base:
+            tool0_controller:
+              {}
+          base_link_inertia:
+            shoulder_link:
+              upper_arm_link:
+                forearm_link:
+                  wrist_1_link:
+                    wrist_2_link:
+                      wrist_3_link:
+                        flange:
+                          tool0:
+                            fake_gripper:
+                              {}
+      Update Interval: 0
+      Value: true
   Enabled: true
   Global Options:
     Background Color: 48; 48; 48
@@ -340,9 +399,9 @@ Visualization Manager:
       Invert Z Axis: false
       Name: Current View
       Near Clip Distance: 0.009999999776482582
-      Pitch: 0.38479745388031006
+      Pitch: 0.24479758739471436
       Target Frame: base_link
-      Yaw: 0.8517598509788513
+      Yaw: 0.4017601013183594
     Saved: ~
 Window Geometry:
   Displays:

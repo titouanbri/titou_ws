@@ -502,9 +502,20 @@ def main():
       
         tutorial = MoveGroupPythonInterfaceTutorial()
         # tutorial.switch_controllers(['scaled_pos_joint_traj_controller'], ['joint_group_vel_controller'])
+        input("============ Press `Enter` open the gripper ...")
+        # tutorial.open_gripper()
+        
+        input("============ Press `Enter` to go to the head ...")
+        tutorial.go_to_pose_goal(0.4,0.4,0.45,0,np.pi,0)
+        tutorial.go_to_pose_goal(0.4,0.4,0.35,0,np.pi,0)
 
-        input("============ Press `Enter` to the initial pose ...")
-        tutorial.traj([0.60,0.60,0.35],[-1,-1,0],0.25,0.35,20)
+        input("============ Press `Enter` close the gripper ...")
+        # tutorial.close_gripper()
+
+
+        input("============ Press `Enter` to start the movement ...")
+        tutorial.go_to_pose_goal(0.4,0.4,0.45,0,np.pi,0)
+        tutorial.traj([0.50,0.40,0.27],[-1,0,0],0.25,0.35,20)
         # tutorial.go_to_pose_goal(0.45,0.45,0.5,0.3,3.14/2,0)
         # input("============ Press `Enter` to the initial pose ...")
         # tutorial.go_to_pose_goal(0.45,0.45,0.5,0,3.14/2-0.3,0)
