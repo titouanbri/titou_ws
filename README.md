@@ -39,3 +39,6 @@
 
 ## mail du goat, du "broyeur de pins", "foudroyeur d'ur30" :
 titouan.briancon@sigma-clermont.fr
+
+## mail du "démagnétiseur", "froisseur de Bota" :
+matteo.proverbio@sigma-clermont.fr
