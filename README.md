@@ -1,7 +1,7 @@
 # UR30-admittance
 
 ## Connecter le robot
-- prendre l'ip du robot (sur la tablette du robot, cliquer en haut a droite, puis "info"), puis configurer le pc : dans paramètre/réseau/filaire/IPV4/manuel : mettre dans "adresse" le même IP que le robot, en changeant le dernier chiffre (exemple : robot=192.168.3.200 ->pc=192.168.3.203) et masque de réseau = 255.255.255.0
+- dans paramètre/réseau/filaire/IPV4/manuel : mettre dans "adresse" le même IP que le robot, en changeant le dernier chiffre donc 192.168.3.20X avec X différent de 0 et masque de réseau = 255.255.255.0
 
 ## Étapes pour configurer le pc pour travailler avec l’ur30 et faire fonctionner l’admittance 
 
