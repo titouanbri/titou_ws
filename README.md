@@ -34,8 +34,8 @@
 - commande pour lancer l'admittance : rosrun force_sensor_node sensor_test.py (bien attendre que les 2 capteurs soient marqués "OK" dans le terminal)
 
 
-## chemin des fichiers utilisés :
-~/catkin_ws/src/universal_robot/force_sensor_node
+## chemin des scripts/launch utilisés :
+~/catkin_ws/src/universal_robot/carnicero
 
 ## mail du goat, du "broyeur de pins", "foudroyeur d'ur30" :
 titouan.briancon@sigma-clermont.fr
