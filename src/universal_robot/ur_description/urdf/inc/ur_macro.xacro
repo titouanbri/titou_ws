@@ -394,9 +394,9 @@
         <!-- Gripper fictif pour la collision -->
     <link name="${prefix}fake_gripper">
       <collision>
-        <origin xyz="0 0 0.12" rpy="0 0 0"/>
+        <origin xyz="0 0 0.07" rpy="0 0 0"/>
         <geometry>
-          <box size="0.08 0.02 0.04"/>
+          <box size="0.08 0.08 0.30"/>
         </geometry>
       </collision>
       <inertial>

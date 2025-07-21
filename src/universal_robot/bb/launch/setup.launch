@@ -1,0 +1,24 @@
+<?xml version="1.0"?>
+
+
+<launch>
+    <arg name="robot_ip" value="192.168.56.2" />
+
+    <!-- robot's driver -->
+    <include file="$(find ur_robot_driver)/launch/ur5e_bringup.launch">
+        <arg name="robot_ip" value="$(arg robot_ip)" />
+    </include>
+
+    <!-- rviz simulation -->
+    <include file="$(find ur5e_moveit_config)/launch/demoR.launch" />
+
+    <!-- add floor collision -->
+    <node name="floor"
+          pkg="bb"
+          type="floor.py"
+          output="screen" />
+
+    
+
+</launch>
+
