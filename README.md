@@ -30,8 +30,8 @@
 
 ## Lancement
 
-- commande pour lancer driver UR + driver ethercat ( à modifier avec les infos du bon robot) : roslaunch force_sensor_node setup.launch
-- commande pour lancer l'admittance : rosrun force_sensor_node sensor_test.py (bien attendre que les 2 capteurs soient marqués "OK" dans le terminal)
+- commande pour lancer driver UR + driver ethercat ( à modifier avec les infos du bon robot) : roslaunch carnicero setup.launch
+- commande pour lancer l'admittance : rosrun carnicero sensor_test.py (bien attendre que les 2 capteurs soient marqués "OK" dans le terminal)
 
 
 ## chemin des scripts/launch utilisés :
