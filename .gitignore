@@ -1,6 +1,7 @@
 # Ignorer les dossiers de build et d’environnement ROS
 build/
 devel/
-
+src/lwr_robot_description/
+src/moveit_lwr/
 # Ignorer la config VSCode
 .vscode/
