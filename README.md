@@ -1,5 +1,8 @@
 # UR30-admittance
 
+## Connecter le robot
+- prendre l'ip du robot (sur la tablette du robot, cliquer en haut a droite, puis "info"), puis configurer le pc : dans paramètre/réseau/filaire/IPV4/manuel : mettre dans "adresse" le même IP que le robot, en changeant le dernier chiffre (exemple : robot=192.168.3.200 ->pc=192.168.3.203) et masque de réseau = 255.255.255.0
+
 ## Étapes pour configurer le pc pour travailler avec l’ur30 et faire fonctionner l’admittance 
 
 - remplacer « titouan » par username avec vscode (dans ws), ctrl maj f
@@ -28,4 +31,14 @@
 ## Lancement
 
 - commande pour lancer driver UR + driver ethercat ( à modifier avec les infos du bon robot) : roslaunch force_sensor_node setup.launch
-- commande pour lancer l'admittance : rosrun force_sensor_node sensor_test.py 
+- commande pour lancer l'admittance : rosrun force_sensor_node sensor_test.py (bien attendre que les 2 capteurs soient marqués "OK" dans le terminal)
+
+
+## chemin des fichiers utilisés :
+~/catkin_ws/src/universal_robot/force_sensor_node
+
+## mail du goat, du "broyeur de pins", "foudroyeur d'ur30" :
+titouan.briancon@sigma-clermont.fr
+
+## mail du "démagnétiseur", "froisseur de Bota" :
+matteo.proverbio@sigma-clermont.fr
