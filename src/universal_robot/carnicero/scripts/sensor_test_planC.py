@@ -242,7 +242,7 @@ class admittance_control(object):
             if self.last_R_mat_test is not None:
                 diff = np.linalg.norm(R_mat_test - self.last_R_mat_test)
                 
-                if diff <= seuil_norme_q:  # ← seuil pour les normes (si différence entre 2 consécutives trop élevé : on prends pas en compte car cassé)
+                if diff <= seuil_norme_q:  # seuil pour les normes (si différence entre 2 consécutives trop élevé : on prends pas en compte car cassé)
                     Rot=Rot_test
                     Rot = Rot     #*self.correction 
                     self.last_Rot=Rot
@@ -317,7 +317,7 @@ class admittance_control(object):
 
         # Admittance parameters
         c=15
-        M = 3.5; B = c*M; K = 0        # translation
+        M = 10; B = c*M; K = 0        # translation
         M_rot = 0.07; B_rot = c*M_rot ; K_rot = 0  # rotation
 
         #adimttance paramters in meat IM
@@ -328,9 +328,9 @@ class admittance_control(object):
         dt =1/frequence
         force_dead_zone_cart = 0.05  # eviter de publier pour rien
         force_dead_zone_rot = 0.003
-        F_alpha = 0.02  # filtre passe-bas exponentiel (proche de 0 = réponse lente mais beaucoup filtré)
+        F_alpha = 0.01  # filtre passe-bas exponentiel (proche de 0 = réponse lente mais beaucoup filtré)
         joint_velocity_smoothed = None  
-        V_alpha = 0.06  # coefficient de lissage (plus petit = plus lisse)
+        V_alpha = 0.04  # coefficient de lissage (plus petit = plus lisse)
 
     
         filtered_force = np.zeros(6)
@@ -359,7 +359,7 @@ class admittance_control(object):
         
 
 
-        while not rospy.is_shutdown() and self.safety():
+        while not rospy.is_shutdown() :   #and self.safety():
             self.timer_init()
 
             # #boutton
