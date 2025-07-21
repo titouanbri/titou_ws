@@ -168,6 +168,8 @@ catkin_install_python(PROGRAMS
   scripts/sensor_test.py
   scripts/sensor_test_planC.py
   scripts/force_sensor_eth_publisher.py
+  scripts/data.py
+
   DESTINATION ${CATKIN_PACKAGE_BIN_DESTINATION}
 )
 

@@ -278,7 +278,7 @@ class admittance_control(object):
 
             Rot_qui_fonctionne=Rot.as_dcm()
             force_trans = np.dot(Rot_qui_fonctionne,force) 
-            torque_trans = np.dot(Rot_qui_fonctionne,torque_manche)
+            torque_trans = np.dot(Rot_qui_fonctionne,torque)
             
             
             # Crée un nouveau message WrenchStamped
@@ -317,20 +317,20 @@ class admittance_control(object):
 
         # Admittance parameters
         c=15
-        M = 10; B = c*M; K = 0        # translation
-        M_rot = 0.07; B_rot = c*M_rot ; K_rot = 0  # rotation
+        M = 7; B = c*M; K = 0        # translation
+        M_rot = 0.06; B_rot = c*M_rot ; K_rot = 0  # rotation
 
         #adimttance paramters in meat IM
         M_IM=10 ; M_rot_IM=0.12
 
 
-        frequence=400 #Hz
+        frequence=350 #Hz
         dt =1/frequence
         force_dead_zone_cart = 0.05  # eviter de publier pour rien
         force_dead_zone_rot = 0.003
         F_alpha = 0.01  # filtre passe-bas exponentiel (proche de 0 = réponse lente mais beaucoup filtré)
         joint_velocity_smoothed = None  
-        V_alpha = 0.04  # coefficient de lissage (plus petit = plus lisse)
+        V_alpha = 0.15  # coefficient de lissage (plus petit = plus lisse)
 
     
         filtered_force = np.zeros(6)
@@ -344,6 +344,8 @@ class admittance_control(object):
         joint_names = ['shoulder_pan_joint', 'shoulder_lift_joint', 'elbow_joint', 'wrist_1_joint', 'wrist_2_joint', 'wrist_3_joint']
         vel_msg= Float64MultiArray()
         vel_msg.data=[0,0,0,0,0,0]
+
+        singular_value_threshold = 0.1
 
         
 
@@ -482,7 +484,33 @@ class admittance_control(object):
 
 
             ee_vel = self.v_k
-            joint_velocities = np.linalg.pinv(jacobian).dot(ee_vel)
+
+
+
+            # joint_velocities = np.linalg.pinv(jacobian).dot(ee_vel)
+
+
+            #test singularité
+
+
+            # 1) décomposition SVD
+            U, S, Vt = np.linalg.svd(jacobian, full_matrices=False)
+
+            # 2) inversion des singular values avec clamping pur
+            S_inv = np.array([
+                1.0/s if s > singular_value_threshold
+                else 1.0/singular_value_threshold
+                for s in S
+            ])
+
+            # 3) reconstruction du pseudo‐inverse clampé
+            J_pinv_clamped = Vt.T.dot(np.diag(S_inv)).dot(U.T)
+
+            # 4) calcul des vitesses articulaires
+            joint_velocities = J_pinv_clamped.dot(ee_vel)
+
+
+
 
             #filtre exp sur la vitesse à publier
             if joint_velocity_smoothed is None:
