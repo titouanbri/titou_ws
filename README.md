@@ -17,7 +17,6 @@
     
 
 - installation : https://gitlab.com/botasys/bota_driver.git bota_driver si jamais ça marche pas
-- chat gpt pour les erreurs
 - sudo apt install ros-noetic-ethercat-grant
 
 - echo "/opt/ros/noetic/lib" | sudo tee /etc/ld.so.conf.d/ros-noetic.conf
@@ -25,7 +24,9 @@
 
 
 - changer le nom du port 
-- changer nom du capteur dans le launch 
+- changer nom du capteur dans le launch
+- chat gpt pour les erreurs
+
 ## Commande finale pour lancer l'acquisition ( se lance avec setup.launch )
 - roslaunch rokubimini_ethercat rokubimini_ethercat.launch
 
