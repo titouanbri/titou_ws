@@ -22,9 +22,8 @@
 - echo "/opt/ros/noetic/lib" | sudo tee /etc/ld.so.conf.d/ros-noetic.conf
 - sudo ldconfig 
 
-dans bota_driver/rokubi_ethercat :
-- changer le nom du port 
-- changer nom du capteur dans le launch
+dans bota_driver/rokubi_ethercat/rokubi_ethercat.launch :
+- changer l'ip du capteur si jamais le driver le demande
 - chat gpt pour les erreurs
 
 ## Commande finale pour lancer l'acquisition ( se lance avec setup.launch )
