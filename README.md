@@ -17,7 +17,8 @@
     
 
 - installation : https://gitlab.com/botasys/bota_driver.git bota_driver si jamais ça marche pas
-- chat gpt pour les erreurs 
+- chat gpt pour les erreurs
+- sudo apt install ros-noetic-ethercat-grant
 
 - echo "/opt/ros/noetic/lib" | sudo tee /etc/ld.so.conf.d/ros-noetic.conf
 - sudo ldconfig 
