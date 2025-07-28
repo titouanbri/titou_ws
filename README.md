@@ -22,7 +22,7 @@
 - echo "/opt/ros/noetic/lib" | sudo tee /etc/ld.so.conf.d/ros-noetic.conf
 - sudo ldconfig 
 
-
+dans bota_driver/rokubi_ethercat :
 - changer le nom du port 
 - changer nom du capteur dans le launch
 - chat gpt pour les erreurs
