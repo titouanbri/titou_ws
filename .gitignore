@@ -3,5 +3,6 @@ build/
 devel/
 src/lwr_robot_description/
 src/moveit_lwr/
+
 # Ignorer la config VSCode
 .vscode/
