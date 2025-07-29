@@ -56,7 +56,7 @@ class admittance_control(object):
         self.force_data = None  # pour stocker la dernière donnée
         self.joint_state = None
 
-        rospy.Subscriber('/wrench', WrenchStamped, self.force_callback)
+        rospy.Subscriber('/force_sensor_eth', WrenchStamped, self.force_callback)
         rospy.Subscriber("/joint_states", JointState, self.joint_state_callback)
 
 
@@ -244,7 +244,7 @@ class admittance_control(object):
                 
                 if diff <= seuil_norme_q:  # seuil pour les normes (si différence entre 2 consécutives trop élevé : on prends pas en compte car cassé)
                     Rot=Rot_test
-                    Rot = Rot     #*self.correction 
+                    Rot = Rot*self.correction 
                     self.last_Rot=Rot
                     self.last_R_mat_test = R_mat_test
                      
@@ -253,7 +253,7 @@ class admittance_control(object):
                     R_mat_test=self.last_R_mat_test
 
             else :
-                Rot=Rot_test       #*self.correction
+                Rot=Rot_test*self.correction
                 self.last_Rot=Rot
                 self.last_R_mat_test=R_mat_test
 
@@ -316,8 +316,8 @@ class admittance_control(object):
         rospy.loginfo("Starting full-body admittance control (6D: position + orientation via torque)...")
 
         # Admittance parameters
-        c=15
-        M = 7; B = c*M; K = 0        # translation
+        c=13
+        M = 6; B = c*M; K = 0        # translation
         M_rot = 0.06; B_rot = c*M_rot ; K_rot = 0  # rotation
 
         #adimttance paramters in meat IM
@@ -345,7 +345,7 @@ class admittance_control(object):
         vel_msg= Float64MultiArray()
         vel_msg.data=[0,0,0,0,0,0]
 
-        singular_value_threshold = 0.1
+        lambda_dls = 0.015   # à tuner : plus grand = plus de damping, moins de vitesse
 
         
 
@@ -493,21 +493,14 @@ class admittance_control(object):
             #test singularité
 
 
-            # 1) décomposition SVD
             U, S, Vt = np.linalg.svd(jacobian, full_matrices=False)
 
-            # 2) inversion des singular values avec clamping pur
-            S_inv = np.array([
-                1.0/s if s > singular_value_threshold
-                else 1.0/singular_value_threshold
-                for s in S
-            ])
+            # formule DLS : S_damped = S / (S^2 + λ^2)
+            S_damped = S / (S**2 + lambda_dls**2)
 
-            # 3) reconstruction du pseudo‐inverse clampé
-            J_pinv_clamped = Vt.T.dot(np.diag(S_inv)).dot(U.T)
+            J_pinv_dls = Vt.T.dot(np.diag(S_damped)).dot(U.T)
 
-            # 4) calcul des vitesses articulaires
-            joint_velocities = J_pinv_clamped.dot(ee_vel)
+            joint_velocities = J_pinv_dls.dot(ee_vel)
 
 
 
@@ -553,9 +546,9 @@ class admittance_control(object):
 def main():
     try:
         print("initialisation du node")
-
+        os.system("pkill -f force_sensor_eth_publisher.py")
         admittance=admittance_control()
-
+        subprocess.Popen(["rosrun", "carnicero", "force_sensor_eth_publisher.py"])
 
         #switch controller au cas ou
         admittance.switch_controllers(['joint_group_vel_controller'], ['scaled_pos_joint_traj_controller'])

@@ -1,8 +1,8 @@
 #!/usr/bin/env python3
 # coding: utf-8
 """
-Logger ROS : /wrench (+ pose EE) + vidéo RealSense + données Arduino sur port série
-- Enregistre forces/torques dans un CSV avec la pose de l'end-effector (TF puis fallback PoseStamped).
+Logger ROS : /wrench (+ pose EE) + vidéo RealSense + données Arduino + EtherCAT dans un CSV
+- Enregistre forces/torques dans un CSV avec la pose de l'end-effector (TF puis fallback PoseStamped) et données capteurs.
 - Sauvegarde une vidéo .mp4 (optionnellement des images) depuis la caméra RealSense.
 
 Paramètres ROS (rosparam ~ns) :
@@ -73,12 +73,19 @@ class WrenchAndCameraLogger:
         self.csv_path = os.path.join(base_dir, f'wrench_data_{timestamp}.csv')
         self.csv_file = open(self.csv_path, mode='w', newline='')
         self.csv_writer = csv.writer(self.csv_file)
+        # En-tête incluant EtherCAT (/force_sensor_eth)
         self.csv_writer.writerow([
             'timestamp_ms', 'timestamp',
+            # Wrench ROS
             'force_x', 'force_y', 'force_z',
             'torque_x', 'torque_y', 'torque_z',
+            # EtherCAT wrench
+            'eth_force_x', 'eth_force_y', 'eth_force_z',
+            'eth_torque_x', 'eth_torque_y', 'eth_torque_z',
+            # End-effector pose
             'ee_x', 'ee_y', 'ee_z',
             'ee_qx', 'ee_qy', 'ee_qz', 'ee_qw',
+            # Arduino
             'R1', 'R2', 'R3', 'R4', 'R5', 'R6'
         ])
 
@@ -97,10 +104,13 @@ class WrenchAndCameraLogger:
         self.latest_pose = None
 
         # Arduino data (valeurs courantes)
-        self.arduino_data = {
-            'R1': float('nan'), 'R2': float('nan'), 'R3': float('nan'),
-            'R4': float('nan'), 'R5': float('nan'), 'R6': float('nan')
-        }
+        self.arduino_data = {f'R{i+1}': float('nan') for i in range(6)}
+
+        # EtherCAT wrench (valeurs courantes)
+        self.eth_force = np.array([np.nan, np.nan, np.nan], dtype=np.float32)
+        self.eth_torque = np.array([np.nan, np.nan, np.nan], dtype=np.float32)
+
+        # Threads
         self.serial_thread = None
         self.serial_running = False
         self.ser = None
@@ -118,6 +128,7 @@ class WrenchAndCameraLogger:
 
         # ------------------ ROS Comm ------------------
         rospy.Subscriber('/wrench', WrenchStamped, self.wrench_callback)
+        rospy.Subscriber('/force_sensor_eth', WrenchStamped, self.eth_callback)
         rospy.Subscriber(self.pose_topic, PoseStamped, self.pose_callback)
 
         rospy.Timer(rospy.Duration(self.duration), self.stop_recording, oneshot=True)
@@ -142,7 +153,6 @@ class WrenchAndCameraLogger:
             self.ser = None
 
     def _serial_loop(self):
-        """Lecture des trames série et mise à jour de self.arduino_data."""
         while not rospy.is_shutdown() and self.serial_running and self.ser is not None:
             try:
                 line = self.ser.readline()
@@ -151,7 +161,6 @@ class WrenchAndCameraLogger:
                 try:
                     line = line.decode('utf-8', errors='ignore').strip()
                 except AttributeError:
-                    # Python2 compat éventuelle
                     line = line.strip()
                 if not line:
                     continue
@@ -161,20 +170,16 @@ class WrenchAndCameraLogger:
             except Exception as e:
                 rospy.logwarn(f"Erreur lecture série : {e}")
                 
-                
     @staticmethod
     def _parse_arduino_line(line):
         line = line.strip()
-        # Nouveau format: "27.00,26.00,22.00,24.00,23.00,26.00"
         if ',' in line and ':' not in line:
             try:
-                vals = [float(x) for x in line.split(',') if x != '']
+                vals = [float(x) for x in line.split(',') if x]
             except ValueError:
                 return {}
-            data = {f'R{i+1}': vals[i] if i < len(vals) else float('nan') for i in range(6)}
-            return data
+            return {f'R{i+1}': vals[i] if i < len(vals) else float('nan') for i in range(6)}
 
-        # Ancien format: "R1:549 R2:209 ... BTN:0"
         out = {}
         for token in line.split():
             if ':' not in token:
@@ -220,31 +225,37 @@ class WrenchAndCameraLogger:
             self.video_writer = None
 
     def _capture_loop(self):
-        """Capture continue des frames couleur, écriture vidéo + images optionnelles."""
-        try:
-            while not rospy.is_shutdown() and self.capturing:
-                frames = self.pipeline.wait_for_frames()
-                color_frame = frames.get_color_frame()
-                if not color_frame:
-                    continue
-
-                img = np.asanyarray(color_frame.get_data())
-
-                if self.video_writer is not None:
-                    self.video_writer.write(img)
-
-                if self.save_images:
-                    now_ms = int(rospy.get_time() * 1000)
-                    img_path = os.path.join(self.image_dir, f'image_{now_ms}.jpg')
-                    cv2.imwrite(img_path, img, [cv2.IMWRITE_JPEG_QUALITY, 90])
-        except Exception as e:
-            rospy.logerr(f"Error in capture thread: {e}")
+        while not rospy.is_shutdown() and self.capturing:
+            frames = self.pipeline.wait_for_frames()
+            color_frame = frames.get_color_frame()
+            if not color_frame:
+                continue
+            img = np.asanyarray(color_frame.get_data())
+            if self.video_writer:
+                self.video_writer.write(img)
+            if self.save_images:
+                now_ms = int(rospy.get_time() * 1000)
+                img_path = os.path.join(self.image_dir, f'image_{now_ms}.jpg')
+                cv2.imwrite(img_path, img, [cv2.IMWRITE_JPEG_QUALITY, 90])
 
     # ------------------ Callbacks ------------------
     def pose_callback(self, msg: PoseStamped):
         self.latest_pose = msg
 
     def wrench_callback(self, msg: WrenchStamped):
+        # Callback principal pour /wrench
+        self._log_data(msg, source='wrench')
+
+    def eth_callback(self, msg: WrenchStamped):
+        # Met à jour les valeurs EtherCAT
+        self.eth_force = np.array([msg.wrench.force.x,
+                                   msg.wrench.force.y,
+                                   msg.wrench.force.z], dtype=np.float32)
+        self.eth_torque = np.array([msg.wrench.torque.x,
+                                    msg.wrench.torque.y,
+                                    msg.wrench.torque.z], dtype=np.float32)
+
+    def _log_data(self, msg: WrenchStamped, source='wrench'):
         if self.csv_file.closed:
             return
 
@@ -257,37 +268,35 @@ class WrenchAndCameraLogger:
         # Pose via TF -> fallback PoseStamped
         px = py = pz = qx = qy = qz = qw = float('nan')
         try:
-            (trans, rot) = self.tf_listener.lookupTransform(
+            trans, rot = self.tf_listener.lookupTransform(
                 self.base_frame, self.ee_frame, rospy.Time(0))
             px, py, pz = trans
             qx, qy, qz, qw = rot
         except Exception:
-            if self.latest_pose is not None:
+            if self.latest_pose:
                 p = self.latest_pose.pose.position
                 o = self.latest_pose.pose.orientation
                 px, py, pz = p.x, p.y, p.z
                 qx, qy, qz, qw = o.x, o.y, o.z, o.w
 
-        # Arduino values snapshot (to avoid race conditions)
-        R1 = self.arduino_data.get('R1', float('nan'))
-        R2 = self.arduino_data.get('R2', float('nan'))
-        R3 = self.arduino_data.get('R3', float('nan'))
-        R4 = self.arduino_data.get('R4', float('nan'))
-        R5 = self.arduino_data.get('R5', float('nan'))
-        R6 = self.arduino_data.get('R6', float('nan'))
+        # Arduino snapshot
+        R = [self.arduino_data.get(f'R{i+1}', float('nan')) for i in range(6)]
 
-        self.csv_writer.writerow([
+        # Écriture ligne CSV avec EtherCAT
+        row = [
             ts_ms, ts_str,
             np.float32(f.x), np.float32(f.y), np.float32(f.z),
             np.float32(t.x), np.float32(t.y), np.float32(t.z),
+            # EtherCAT
+            *self.eth_force.tolist(),
+            *self.eth_torque.tolist(),
+            # Pose
             np.float32(px), np.float32(py), np.float32(pz),
             np.float32(qx), np.float32(qy), np.float32(qz), np.float32(qw),
-            np.float32(R1), np.float32(R2), np.float32(R3),
-            np.float32(R4), np.float32(R5), np.float32(R6)
-        ])
-        # Optionnel : flush pour sécuriser
-        # self.csv_file.flush()
-
+            # Arduino
+            *[np.float32(val) for val in R]
+        ]
+        self.csv_writer.writerow(row)
 
     # ------------------ Timers ------------------
     def print_progress(self, _event):
@@ -304,41 +313,23 @@ class WrenchAndCameraLogger:
 
     # ------------------ Shutdown ------------------
     def shutdown(self):
-        # Arrêt thread capture
         self.capturing = False
-        if self.capture_thread is not None and self.capture_thread.is_alive():
+        if self.capture_thread and self.capture_thread.is_alive():
             self.capture_thread.join(timeout=2.0)
-
-        # Arrêt thread série
         self.serial_running = False
-        if self.serial_thread is not None and self.serial_thread.is_alive():
+        if self.serial_thread and self.serial_thread.is_alive():
             self.serial_thread.join(timeout=2.0)
-        try:
-            if self.ser is not None and self.ser.is_open:
-                self.ser.close()
-        except Exception:
-            pass
-
-        # Stop pipeline
-        try:
-            if self.pipeline is not None:
-                self.pipeline.stop()
-        except Exception:
-            pass
-
-        # Fermer writer vidéo
-        try:
-            if self.video_writer is not None:
-                self.video_writer.release()
-        except Exception:
-            pass
-
-        # Fermer CSV
+        if self.ser and self.ser.is_open:
+            self.ser.close()
+        if self.pipeline:
+            self.pipeline.stop()
+        if self.video_writer:
+            self.video_writer.release()
         if not self.csv_file.closed:
             self.csv_file.close()
 
         rospy.loginfo(f"CSV saved: {self.csv_path}")
-        if self.video_writer is not None:
+        if self.video_writer:
             rospy.loginfo(f"Video saved: {self.video_path}")
         if self.save_images:
             rospy.loginfo(f"Images in: {self.image_dir}")
