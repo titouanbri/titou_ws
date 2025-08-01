@@ -170,6 +170,9 @@ catkin_install_python(PROGRAMS
   scripts/force_sensor_eth_publisher.py
   scripts/data.py
   scripts/data2.py
+  scripts/ros_ft_publisher.py
+  scripts/ros_ft_publisher_pysoem.py
+
   DESTINATION ${CATKIN_PACKAGE_BIN_DESTINATION}
 )
 
