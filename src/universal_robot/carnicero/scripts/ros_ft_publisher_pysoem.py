@@ -33,14 +33,14 @@ def main():
     rospy.init_node('sensor_publisher', anonymous=False)
 
     # ROS parameters
-    iface         = rospy.get_param('~interface', 'eth0')
+    iface         = rospy.get_param('~interface', 'enxa0cec89e23c0')
     slave_pos     = rospy.get_param('~slave_position', 0)
     byte_offset   = rospy.get_param('~byte_offset', 0)
     num_values    = rospy.get_param('~num_values', 6)
     data_type     = rospy.get_param('~data_type', 'int16')
     scale         = rospy.get_param('~scale', 1.0)
     topic_name    = rospy.get_param('~topic_name', '/sensor_data')
-    rate_hz       = rospy.get_param('~publish_rate', 10.0)
+    rate_hz       = rospy.get_param('~publish_rate', 500.0)
 
     # Publisher
     pub = rospy.Publisher(topic_name, Float32MultiArray, queue_size=10)
@@ -65,11 +65,6 @@ def main():
     # Map PDOs
     master.config_map()
 
-    master.activate()
-    # puis un cycle pour laisser le noyau prendre en compte la config
-    master.send_processdata()
-    master.receive_processdata(timeout=2e6)
-
 
     # Debug: list slave mapping after config_map
     for idx, slave in enumerate(master.slaves):
@@ -79,9 +74,9 @@ def main():
     # Set slaves to OPERATIONAL
     master.state = pysoem.OP_STATE
     master.write_state()
-    master.send_processdata()
-    master.receive_processdata(timeout=2e6)
-    if not master.state_check(pysoem.OP_STATE, timeout=2e6):
+    print(master.state_check(pysoem.OP_STATE, timeout=1000))
+
+    if not master.state_check(pysoem.OP_STATE, timeout=1000):
         rospy.logerr("Failed to set slaves to OPERATIONAL")
         return
     rospy.loginfo("Slaves in OPERATIONAL state, starting data loop...")
@@ -90,7 +85,7 @@ def main():
     slave = master.slaves[slave_pos]
     slave.output = b'\x0B\x00\x00\x00'
     master.send_processdata()
-    master.receive_processdata(timeout=2e6)
+    master.receive_processdata(timeout=1000)
     # rospy.loginfo("Sent Start‐Output command to sensor")
 
 
@@ -99,10 +94,18 @@ def main():
     while not rospy.is_shutdown():
 
             # ————— on redonne à chaque cycle la commande “Start‐FT” —————
-        slave = master.slaves[slave_pos]
-        slave.output = b'\x0B\x00\x00\x00'
+        # slave = master.slaves[slave_pos]
+        # slave.output = b'\x0B\x00\x00\x00'
         master.send_processdata()
-        master.receive_processdata(timeout=2e6)
+        wkc = master.receive_processdata(timeout=1000)
+        if wkc == 0:
+            rospy.logwarn("WKC=0, échange PDO invalide")
+            continue
+        
+        print(master.state_check(pysoem.OP_STATE, timeout=1000))
+        if not master.state_check(pysoem.OP_STATE, timeout=1000):
+            code = slave.al_status
+            rospy.logerr("Basculement en PRE-OP, al_status=0x%02x", code)
 
         try:
             slave = master.slaves[slave_pos]
@@ -112,7 +115,7 @@ def main():
             # Debug: raw data hex and change detection
             raw_hex = data.hex()
             if prev_raw is None or raw_hex != prev_raw:
-                rospy.loginfo("Raw PDO data (hex): %s", raw_hex)
+                # rospy.loginfo("Raw PDO data (hex): %s", raw_hex)
                 prev_raw = raw_hex
             else:
                 rospy.logdebug("Raw PDO data unchanged")

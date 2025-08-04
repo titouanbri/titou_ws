@@ -172,7 +172,7 @@ catkin_install_python(PROGRAMS
   scripts/data2.py
   scripts/ros_ft_publisher.py
   scripts/ros_ft_publisher_pysoem.py
-
+  scripts/new_and_last_method_eth.py
   DESTINATION ${CATKIN_PACKAGE_BIN_DESTINATION}
 )
 
