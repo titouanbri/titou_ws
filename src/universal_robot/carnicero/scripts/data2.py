@@ -51,7 +51,7 @@ class WrenchAndCameraLogger:
         rospy.init_node('data', anonymous=True)
 
         # ------------------ Paramètres ------------------
-        self.duration = rospy.get_param('~duration', 5)
+        self.duration = rospy.get_param('~duration', 30)
         self.base_frame = rospy.get_param('~base_frame', 'base_link')
         self.ee_frame = rospy.get_param('~ee_frame', 'tool0')
         self.pose_topic = rospy.get_param('~ee_pose_topic', '/ee_pose')
@@ -113,7 +113,8 @@ class WrenchAndCameraLogger:
         # EtherCAT wrench (valeurs courantes)
         self.eth_force = np.array([np.nan, np.nan, np.nan], dtype=np.float32)
         self.eth_torque = np.array([np.nan, np.nan, np.nan], dtype=np.float32)
-
+        self.OR_force = np.array([np.nan, np.nan, np.nan], dtype=np.float32)
+        self.OR_torque = np.array([np.nan, np.nan, np.nan], dtype=np.float32)
         # Threads
         self.serial_thread = None
         self.serial_running = False
@@ -132,7 +133,8 @@ class WrenchAndCameraLogger:
 
         # ------------------ ROS Comm ------------------
         rospy.Subscriber('/wrench', WrenchStamped, self.wrench_callback)
-        rospy.Subscriber('/force_sensor_eth', WrenchStamped, self.eth_callback)
+        # rospy.Subscriber('/force_sensor_eth', WrenchStamped, self.eth_callback)
+        rospy.Subscriber('/bus0/ft_sensor0/ft_sensor_readings/wrench', WrenchStamped, self.eth_callback)
         rospy.Subscriber('/ft_sensor', WrenchStamped, self.OR_callback)
         rospy.Subscriber(self.pose_topic, PoseStamped, self.pose_callback)
 
@@ -310,8 +312,8 @@ class WrenchAndCameraLogger:
             # Arduino
             *[np.float32(val) for val in R],
             #Onrobot
-            *self.eth_force.tolist(),
-            *self.eth_torque.tolist()
+            *self.OR_force.tolist(),
+            *self.OR_torque.tolist()
         ]
         self.csv_writer.writerow(row)
 
