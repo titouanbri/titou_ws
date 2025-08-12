@@ -51,7 +51,7 @@ class WrenchAndCameraLogger:
         rospy.init_node('data', anonymous=True)
 
         # ------------------ Paramètres ------------------
-        self.duration = rospy.get_param('~duration', 30)
+        self.duration = rospy.get_param('~duration', 50)
         self.base_frame = rospy.get_param('~base_frame', 'base_link')
         self.ee_frame = rospy.get_param('~ee_frame', 'tool0')
         self.pose_topic = rospy.get_param('~ee_pose_topic', '/ee_pose')

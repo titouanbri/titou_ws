@@ -30,8 +30,9 @@ import serial
 import time
 
 
-#initialisation de la teensy 
-# PORT = '/dev/ttyACM0'
+#teensy initialisation (if using the teensy)
+
+# PORT = '/dev/ttyACM0'   
 # BAUD = 9600
 # try:
 #     ser = serial.Serial(PORT, BAUD, timeout=0)
@@ -56,7 +57,7 @@ class admittance_control(object):
         self.force_data = None  # pour stocker la dernière donnée
         self.joint_state = None
 
-        rospy.Subscriber('/force_sensor_eth', WrenchStamped, self.force_callback)
+        rospy.Subscriber('/force_sensor_eth', WrenchStamped, self.force_callback) # sensor used to acquire forces 
         rospy.Subscriber("/joint_states", JointState, self.joint_state_callback)
 
 
@@ -65,8 +66,6 @@ class admittance_control(object):
         self.last_Rot=None
 
         # for time logging
-        self.timer_name =[]
-        self.timer_value =[]
 
         #variable pour changer de robot
         self.tool_frame="tool0"
@@ -84,11 +83,10 @@ class admittance_control(object):
         
         self.kdl_fk_solver = PyKDL.ChainFkSolverPos_recursive(chain)
 
-        self.correction = R.from_euler('z', -np.pi / 2)  #correction constante pour le capteur
-        self.cg_history = deque(maxlen=100)  # Moyenne glissante sur 10 valeurs pour le centre de gravité 
+        self.correction = R.from_euler('z', -np.pi / 2)  # constant correction for the sensor frame (only for the rokubi serial and ethercat)
 
         
-        self.joint_frames = [     #nom des repères des joints
+        self.joint_frames = [     # joint frame names (not used but useful to know)
         'base_link',
         'shoulder_link',
         'forearm_link',
@@ -104,32 +102,6 @@ class admittance_control(object):
         self.a_k = np.zeros(6)
 
 
-
-    # les fonctions timer servent à afficher le temps que met le code exécuter une certaine partie du code
-
-    #initialise, à mettre au début du code
-    def timer_init(self):
-        # self.timer_name =["init"]
-        # self.timer_value =[rospy.Time.now()]
-        pass
-        
-    #chaque add est un affichage, et calcule par rapport au add précédent (init compris)
-    def timer_add(self, name):
-        # self.timer_name.append(name)
-        # self.timer_value.append(rospy.Time.now())
-        pass
-
-    #a mettre à la fin 
-    def timer_info(self):
-        # total_time = self.timer_value[-1] - self.timer_value[0]
-        # total_hz = 1.0/total_time.to_sec()
-        # sentence = []
-        # for i in range(1,len(self.timer_value)):
-        #     sentence.append(self.timer_name[i])
-        #     sentence.append(str(round((100*(self.timer_value[i]-self.timer_value[i-1])/total_time),2))) 
-        # rospy.loginfo_throttle(0.1,"\n".join(sentence)+ f" \n temp total : {round(total_hz,2)} Hz")
-        pass
-
     def force_callback(self, msg):
         self.force_data = msg
 
@@ -139,7 +111,7 @@ class admittance_control(object):
 
 
 
-    #fonction pour s'assurer que les bons controllers sont lancés, sinon les lance
+    #function to be sure that the correct controller is launched 
     def switch_controllers(self,start_list, stop_list):
         rospy.wait_for_service('/controller_manager/switch_controller')
         try:
@@ -182,7 +154,7 @@ class admittance_control(object):
             rospy.logwarn(f"Impossible d'obtenir {joint_frame} : {e}")
         return positions
 
-    #fonction de sécurité (spatiale)
+    # function for spacial safeties, you can adapt it with your environment values. Disabled by default, to activate it uncomment the good lign in the loop 
     def safety(self):
         limite_basse_wrist=0.20
         limite_basse_elbow=0.15
@@ -193,28 +165,13 @@ class admittance_control(object):
         wrist1= self.get_joint_positions("wrist_1_link")[0] > limite_mur
         return (wrist and elbow and elbow1 and wrist1)
 
-
-    #utilise le capteur ethercat pour savoir si l'utilisateur est entrain de couper ou non (pas obligatoire, mettre return False pour l'ignorer)   
-    # def In_Meat(self):
-    #     #utilisation de l'ethercat pour savoir si on est dans la viande
-    #     seuil = 3
-    #     data = np.array([
-    #         self.force_data_eth.wrench.force.x,
-    #         self.force_data_eth.wrench.force.y,
-    #         self.force_data_eth.wrench.force.z,
-    #         # self.force_data_eth.wrench.torque.x,
-    #         # self.force_data_eth.wrench.torque.y,
-    #         # self.force_data_eth.wrench.torque.z,
-    #     ])
-    #     norme=np.linalg.norm(data)
-        
-    #     return norme > seuil
-
-    #renvoie les valeurs du capteur serie dans la base fixe ("base_link")
+    
     def transform_wrench_to_frame_alamain(self,wrench_msg):
+        #transform the forces from the sensor frame to the robot base frame
+        #there is also a test on the quaternions, because some of them are broken and can disturb the admittance 
 
         
-        seuil_norme_q=0.1
+        threshold_norme_q=0.1
         tool_frame=self.tool_frame
         base_frame=self.base_frame
 
@@ -230,10 +187,8 @@ class admittance_control(object):
             
             
 
-            # Récupère la rotation
             q = transform.transform.rotation
 
-            # à tester si il est pas cassé
             Rot_test = R.from_quat([q.x, q.y, q.z, q.w])
             R_mat_test = Rot_test.as_dcm()
 
@@ -242,7 +197,7 @@ class admittance_control(object):
             if self.last_R_mat_test is not None:
                 diff = np.linalg.norm(R_mat_test - self.last_R_mat_test)
                 
-                if diff <= seuil_norme_q:  # seuil pour les normes (si différence entre 2 consécutives trop élevé : on prends pas en compte car cassé)
+                if diff <= threshold_norme_q:  # Threshold for norms (if the difference between two consecutive ones is too high, it is ignored as broken)
                     Rot=Rot_test
                     Rot = Rot*self.correction 
                     self.last_Rot=Rot
@@ -260,7 +215,7 @@ class admittance_control(object):
 
     
 
-            # Force et torque dans le repère capteur
+            # Force and torque in sensor frame 
             force = np.array([
                 wrench_msg.wrench.force.x,
                 wrench_msg.wrench.force.y,
@@ -272,13 +227,13 @@ class admittance_control(object):
                 wrench_msg.wrench.torque.z
             ])
 
-            #déplacement capteur ----> manche
+            #torques displacement sensor ----> handle
             d=np.array([0,0.05,0.07])
             torque_manche=torque + np.cross(d,force)
 
             Rot_qui_fonctionne=Rot.as_dcm()
             force_trans = np.dot(Rot_qui_fonctionne,force) 
-            torque_trans = np.dot(Rot_qui_fonctionne,torque)
+            torque_trans = np.dot(Rot_qui_fonctionne,torque_manche)
             
             
             # Crée un nouveau message WrenchStamped
@@ -296,11 +251,15 @@ class admittance_control(object):
         
 
         except Exception as e:
-            rospy.logwarn("Erreur transformation explicite : %s", str(e))
+            rospy.logwarn("Explicit transformation error : %s", str(e))
             return None
 
 
-    #boutton
+
+
+
+    # use of the teensy to use button which can stop/start the admittance
+
     # def PRESS(self):
     #     line = ser.readline().decode('utf-8', errors='ignore').strip()
     #     if line == "PRESS":
@@ -320,17 +279,15 @@ class admittance_control(object):
         M = 6; B = c*M; K = 0        # translation
         M_rot = 0.06; B_rot = c*M_rot ; K_rot = 0  # rotation
 
-        #adimttance paramters in meat IM
-        M_IM=10 ; M_rot_IM=0.12
 
 
-        frequence=350 #Hz
+        frequence=350 #Hz       be sure that this frequency is stable on your computer, use "rostopic hz /topic_name"
         dt =1/frequence
-        force_dead_zone_cart = 0.05  # eviter de publier pour rien
+        force_dead_zone_cart = 0.05  # avoid useless publishment
         force_dead_zone_rot = 0.003
-        F_alpha = 0.01  # filtre passe-bas exponentiel (proche de 0 = réponse lente mais beaucoup filtré)
+        F_alpha = 0.01  # force exponential low-pass filter (close to 0 = slow response but strong filtering)
         joint_velocity_smoothed = None  
-        V_alpha = 0.15  # coefficient de lissage (plus petit = plus lisse)
+        V_alpha = 0.15  # velocity exponential low-pass filter (close to 0 = slow response but strong filtering)
 
     
         filtered_force = np.zeros(6)
@@ -339,20 +296,17 @@ class admittance_control(object):
         B_mat=np.array([B,B,B,B_rot,B_rot,B_rot])
         K_mat=np.array([K,K,K,K_rot,K_rot,K_rot])
         M_mat=np.array([M,M,M,M_rot,M_rot,M_rot])
-        M_mat_IM=np.array([M_IM,M_IM,M_IM,M_rot_IM,M_rot_IM,M_rot_IM])
-        B_mat_IM=c*M_mat_IM
         joint_names = ['shoulder_pan_joint', 'shoulder_lift_joint', 'elbow_joint', 'wrist_1_joint', 'wrist_2_joint', 'wrist_3_joint']
         vel_msg= Float64MultiArray()
         vel_msg.data=[0,0,0,0,0,0]
 
-        lambda_dls = 0.015   # à tuner : plus grand = plus de damping, moins de vitesse
+        lambda_dls = 0.015   # damping of the close singularity accelerations : Higher value = more damping, less speed
 
         
 
 
 
         
-
         joint_vel_pub = rospy.Publisher('/joint_group_vel_controller/command', Float64MultiArray, queue_size=1)
 
 
@@ -361,8 +315,7 @@ class admittance_control(object):
         
 
 
-        while not rospy.is_shutdown() :   #and self.safety():
-            self.timer_init()
+        while not rospy.is_shutdown() :   #and self.safety():     
 
             # #boutton
             # if  not self.PRESS():
@@ -386,11 +339,11 @@ class admittance_control(object):
 
             if self.force_data is None:
                 rate.sleep()
-                continue # attend une valeur
+                continue 
 
             if self.joint_state is None:
                 rate.sleep()
-                continue  # attend une valeur
+                continue  
         
                 
 
@@ -403,7 +356,7 @@ class admittance_control(object):
                 continue
 
             
-            #recup force (from force_sensor_publisher)
+            #force from force_sensor_publisher
             fx = wrench_global.wrench.force.x
             fy = wrench_global.wrench.force.y
             fz = wrench_global.wrench.force.z
@@ -412,12 +365,12 @@ class admittance_control(object):
             tz = wrench_global.wrench.torque.z
             current_force = np.array([fx,fy,fz,tx,ty,tz])
 
-            #recup pos joint
+            #joint positions
             joint_values = [self.joint_state.position[self.joint_state.name.index(jn)] for jn in joint_names]  #arange l'ordre des joint
             joint_values_np = np.array(joint_values)
 
 
-            #filtre passe bas exponentiel
+            # force exponential low-pass filter
             smoothed_rel = (1 - F_alpha) * smoothed_rel + F_alpha * current_force
 
 
@@ -426,7 +379,7 @@ class admittance_control(object):
 
 
 
-            # test zone morte
+            # test dead zone 
             if np.linalg.norm(filtered_force[:3]) < force_dead_zone_cart :
                     filtered_force[0] = 0.0
                     filtered_force[1] = 0.0
@@ -438,74 +391,36 @@ class admittance_control(object):
             
             
             
-            # 1. Remplir KDL.JntArray
+            # computing the jacobian
             jnt_array = PyKDL.JntArray(len(joint_values))
             for i, pos in enumerate(joint_values):
                 jnt_array[i] = pos
-
-
-            # 1bis. CALCUL DE LA POSE RÉELLE DE L'EFFECTEUR
             fk_frame = PyKDL.Frame()
             self.kdl_fk_solver.JntToCart(jnt_array, fk_frame)
-            # Translation
-            current_pos = np.array([fk_frame.p[0], fk_frame.p[1], fk_frame.p[2]])
-
-            # on récupère la quaternion KDL (x,y,z,w)
-            qx, qy, qz, qw = fk_frame.M.GetQuaternion()
-            # on convertit directement en vecteur de rotation
-            current_rot = R.from_quat([qx, qy, qz, qw]).as_rotvec()
-
-            x_k_real = np.hstack((current_pos, current_rot))
-
-
-        
-
-            # 2. Calculer la Jacobienne
             jacobian = PyKDL.Jacobian(len(joint_values))
             self.kdl_jnt_to_jac_solver.JntToJac(jnt_array, jacobian)
-
-            # 3. Convertir en NumPy
             jacobian = np.array([[jacobian[i, j] for j in range(jacobian.columns())] for i in range(6)])
 
 
-            # if self.In_Meat() :
-            #     M_dyn=M_mat_IM
-            #     B_dyn=B_mat_IM
-            #     print("on nez dan la viande")
-            # else :
-            #     M_dyn=M_mat
-            #     B_dyn=B_mat
                 
 
             # Admittance dynamics
             self.a_k = (filtered_force - B_mat* self.v_k - K_mat * self.x_k) /M_mat      
             self.v_k += self.a_k * dt
-            self.x_k = x_k_real   #sert à rien car k=0 dans le modèle, à modifier selon besoin 
+            self.x_k = self.v_k*dt   #useless because k=0 in this case 
 
 
             ee_vel = self.v_k
 
 
-
-            # joint_velocities = np.linalg.pinv(jacobian).dot(ee_vel)
-
-
-            #test singularité
-
+            #damping of singularity accelerations 
 
             U, S, Vt = np.linalg.svd(jacobian, full_matrices=False)
-
-            # formule DLS : S_damped = S / (S^2 + λ^2)
             S_damped = S / (S**2 + lambda_dls**2)
-
             J_pinv_dls = Vt.T.dot(np.diag(S_damped)).dot(U.T)
-
             joint_velocities = J_pinv_dls.dot(ee_vel)
 
-
-
-
-            #filtre exp sur la vitesse à publier
+            #Exponential filter on the velocity to be published
             if joint_velocity_smoothed is None:
                 joint_velocity_smoothed = joint_velocities
             else:
@@ -525,11 +440,8 @@ class admittance_control(object):
 
 
 
-            self.timer_add("fin")
             rate.sleep()
 
-            self.timer_add("att")
-            self.timer_info()
 
         values=np.array(vel_msg.data)
         for _ in range (100) :
@@ -545,19 +457,26 @@ class admittance_control(object):
         
 def main():
     try:
-        print("initialisation du node")
-        os.system("pkill -f force_sensor_eth_publisher.py")
-        admittance=admittance_control()
-        subprocess.Popen(["rosrun", "carnicero", "force_sensor_eth_publisher.py"])
 
-        #switch controller au cas ou
+        
+        print("node initialisation")
+
+        # useful is you use a special publisher for the forces, to be sure that it's closed before launching it
+        os.system("pkill -f force_sensor_eth_publisher.py") 
+        admittance=admittance_control()
+
+
+        # launching the force publisher 
+        subprocess.Popen(["rosrun", "carnicero", "force_sensor_eth_publisher.py"])  
+
+        #controller switch (as a precaution)
         admittance.switch_controllers(['joint_group_vel_controller'], ['scaled_pos_joint_traj_controller'])
 
 
-        #lancement admittance
+        #launching the admittance
         admittance.admittance_openloop()
 
-        print("fin de l'admittance")
+        print("end of the admittance")
         
     except rospy.ROSInterruptException:
         return
