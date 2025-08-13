@@ -42,8 +42,7 @@ In bota\_driver/rokubi\_ethercat/rokubi\_ethercat.launch:
 \~/catkin\_ws/src/universal\_robot/carnicero
 
 # Important 
-##
-### because of several hardware problems, it could be modification in the scripts depending on which is the last configuration used, if there are problems don't hesitate to contact the autors.
+Because of several hardware problems, it could be modification in the scripts depending on which is the last configuration used, if there are problems don't hesitate to contact the autors.
 
 ## Email of the GOAT, “UR30 pin crusher”, “UR30 thunderstriker”:
 
