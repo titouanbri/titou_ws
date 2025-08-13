@@ -29,10 +29,9 @@ import os
 import serial
 import time
 
-
 #teensy initialisation (if using the teensy)
 
-# PORT = '/dev/ttyACM0'   
+# PORT = '/dev/ttyACM0'
 # BAUD = 9600
 # try:
 #     ser = serial.Serial(PORT, BAUD, timeout=0)
@@ -46,18 +45,17 @@ import time
 
 class admittance_control(object):
     def __init__(self):
-        rospy.init_node("sensor_test", anonymous=True)
+        rospy.init_node("admittance", anonymous=True)
 
         group_name = "manipulator"
 
-        
         self.tf_buffer = tf2_ros.Buffer()
         self.tf_listener = tf2_ros.TransformListener(self.tf_buffer)
 
         self.force_data = None  # pour stocker la dernière donnée
         self.joint_state = None
 
-        rospy.Subscriber('/force_sensor_eth', WrenchStamped, self.force_callback) # sensor used to acquire forces 
+        rospy.Subscriber('/force_sensor_eth', WrenchStamped, self.force_callback_eth) # sensor used to acquire forces 
         rospy.Subscriber("/joint_states", JointState, self.joint_state_callback)
 
 
@@ -65,9 +63,7 @@ class admittance_control(object):
         self.last_R_mat_test=None
         self.last_Rot=None
 
-        # for time logging
 
-        #variable pour changer de robot
         self.tool_frame="tool0"
         self.base_frame="base_link"
 
@@ -101,9 +97,11 @@ class admittance_control(object):
         self.x_k = np.zeros(6)
         self.a_k = np.zeros(6)
 
-
     def force_callback(self, msg):
         self.force_data = msg
+
+    def force_callback_eth(self, msg):
+        self.force_data_eth = msg
 
     def joint_state_callback(self, msg):
         self.joint_state = msg
@@ -143,8 +141,8 @@ class admittance_control(object):
         
         try:
             tf_stamped = self.tf_buffer.lookup_transform(
-                self.base_frame,    # repère absolu
-                joint_frame,              # repère de l’articulation
+                self.base_frame,    
+                joint_frame,              
                 rospy.Time(0),
                 rospy.Duration(0.1)
             )
@@ -165,13 +163,12 @@ class admittance_control(object):
         wrist1= self.get_joint_positions("wrist_1_link")[0] > limite_mur
         return (wrist and elbow and elbow1 and wrist1)
 
-    
-    def transform_wrench_to_frame_alamain(self,wrench_msg):
+
+    def transform_wrench_to_base_frame(self,wrench_msg):
         #transform the forces from the sensor frame to the robot base frame
         #there is also a test on the quaternions, because some of them are broken and can disturb the admittance 
-
         
-        threshold_norme_q=0.1
+        seuil_norme_q=0.1
         tool_frame=self.tool_frame
         base_frame=self.base_frame
 
@@ -185,19 +182,16 @@ class admittance_control(object):
                 rospy.Duration(0.01)
             )
             
-            
-
             q = transform.transform.rotation
 
             Rot_test = R.from_quat([q.x, q.y, q.z, q.w])
             R_mat_test = Rot_test.as_dcm()
 
-            
 
             if self.last_R_mat_test is not None:
                 diff = np.linalg.norm(R_mat_test - self.last_R_mat_test)
                 
-                if diff <= threshold_norme_q:  # Threshold for norms (if the difference between two consecutive ones is too high, it is ignored as broken)
+                if diff <= seuil_norme_q:  # Threshold for norms (if the difference between two consecutive ones is too high, it is ignored as broken)
                     Rot=Rot_test
                     Rot = Rot*self.correction 
                     self.last_Rot=Rot
@@ -236,7 +230,6 @@ class admittance_control(object):
             torque_trans = np.dot(Rot_qui_fonctionne,torque_manche)
             
             
-            # Crée un nouveau message WrenchStamped
             new_wrench = WrenchStamped()
             new_wrench.header.stamp = wrench_msg.header.stamp
             new_wrench.header.frame_id = self.tool_frame
@@ -253,9 +246,6 @@ class admittance_control(object):
         except Exception as e:
             rospy.logwarn("Explicit transformation error : %s", str(e))
             return None
-
-
-
 
 
     # use of the teensy to use button which can stop/start the admittance
@@ -275,19 +265,16 @@ class admittance_control(object):
         rospy.loginfo("Starting full-body admittance control (6D: position + orientation via torque)...")
 
         # Admittance parameters
-        c=13
-        M = 6; B = c*M; K = 0        # translation
-        M_rot = 0.06; B_rot = c*M_rot ; K_rot = 0  # rotation
-
-
-
-        frequence=350 #Hz       be sure that this frequency is stable on your computer, use "rostopic hz /topic_name"
+        c=15
+        M = 3.5; B = c*M; K = 0        # translation
+        M_rot = 0.07; B_rot = c*M_rot ; K_rot = 0  # rotation
+        frequence=400 #Hz   be sure that this frequency is stable on your computer, use "rostopic hz /topic_name"
         dt =1/frequence
-        force_dead_zone_cart = 0.05  # avoid useless publishment
+        force_dead_zone_cart = 0.05  # eviter de publier pour rien
         force_dead_zone_rot = 0.003
-        F_alpha = 0.01  # force exponential low-pass filter (close to 0 = slow response but strong filtering)
+        F_alpha = 0.02  # force exponential low-pass filter (close to 0 = slow response but strong filtering)
         joint_velocity_smoothed = None  
-        V_alpha = 0.15  # velocity exponential low-pass filter (close to 0 = slow response but strong filtering)
+        V_alpha = 0.06  # velocity exponential low-pass filter (close to 0 = slow response but strong filtering)
 
     
         filtered_force = np.zeros(6)
@@ -300,13 +287,12 @@ class admittance_control(object):
         vel_msg= Float64MultiArray()
         vel_msg.data=[0,0,0,0,0,0]
 
-        lambda_dls = 0.015   # damping of the close singularity accelerations : Higher value = more damping, less speed
-
         
 
 
 
         
+
         joint_vel_pub = rospy.Publisher('/joint_group_vel_controller/command', Float64MultiArray, queue_size=1)
 
 
@@ -315,7 +301,7 @@ class admittance_control(object):
         
 
 
-        while not rospy.is_shutdown() :   #and self.safety():     
+        while not rospy.is_shutdown() : #and self.safety():
 
             # #boutton
             # if  not self.PRESS():
@@ -350,7 +336,7 @@ class admittance_control(object):
 
 
             # Transform force into base_link
-            wrench_global = self.transform_wrench_to_frame_alamain(self.force_data)
+            wrench_global = self.transform_wrench_to_base_frame(self.force_data)
             if wrench_global is None:
                 rate.sleep()
                 continue
@@ -390,35 +376,25 @@ class admittance_control(object):
                     filtered_force[5] = 0.0
             
             
-            
             # computing the jacobian
             jnt_array = PyKDL.JntArray(len(joint_values))
             for i, pos in enumerate(joint_values):
                 jnt_array[i] = pos
+
             fk_frame = PyKDL.Frame()
             self.kdl_fk_solver.JntToCart(jnt_array, fk_frame)
             jacobian = PyKDL.Jacobian(len(joint_values))
             self.kdl_jnt_to_jac_solver.JntToJac(jnt_array, jacobian)
             jacobian = np.array([[jacobian[i, j] for j in range(jacobian.columns())] for i in range(6)])
 
-
-                
-
-            # Admittance dynamics
+            # Admittance
             self.a_k = (filtered_force - B_mat* self.v_k - K_mat * self.x_k) /M_mat      
             self.v_k += self.a_k * dt
-            self.x_k = self.v_k*dt   #useless because k=0 in this case 
+            self.x_k = self.v_k*dt    #useless because k=0 in this case 
 
 
             ee_vel = self.v_k
-
-
-            #damping of singularity accelerations 
-
-            U, S, Vt = np.linalg.svd(jacobian, full_matrices=False)
-            S_damped = S / (S**2 + lambda_dls**2)
-            J_pinv_dls = Vt.T.dot(np.diag(S_damped)).dot(U.T)
-            joint_velocities = J_pinv_dls.dot(ee_vel)
+            joint_velocities = np.linalg.pinv(jacobian).dot(ee_vel)
 
             #Exponential filter on the velocity to be published
             if joint_velocity_smoothed is None:
@@ -441,8 +417,7 @@ class admittance_control(object):
 
 
             rate.sleep()
-
-
+        #clean stop with the button
         values=np.array(vel_msg.data)
         for _ in range (100) :
             values= values/1.03               
@@ -457,17 +432,19 @@ class admittance_control(object):
         
 def main():
     try:
-
-        
         print("node initialisation")
 
         # useful is you use a special publisher for the forces, to be sure that it's closed before launching it
-        os.system("pkill -f force_sensor_eth_publisher.py") 
+        os.system("pkill -f force_sensor_publisher.py")
+        os.system("pkill -f force_sensor_eth_publisher.py")
+
+
         admittance=admittance_control()
 
-
         # launching the force publisher 
-        subprocess.Popen(["rosrun", "carnicero", "force_sensor_eth_publisher.py"])  
+        subprocess.Popen(["rosrun", "carnicero", "force_sensor_publisher.py"])
+        subprocess.Popen(["rosrun", "carnicero", "force_sensor_eth_publisher.py"])
+
 
         #controller switch (as a precaution)
         admittance.switch_controllers(['joint_group_vel_controller'], ['scaled_pos_joint_traj_controller'])

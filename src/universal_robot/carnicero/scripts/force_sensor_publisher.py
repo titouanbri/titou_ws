@@ -1,8 +1,7 @@
 #!/usr/bin/env python3
 
-
-#publishing of the sensor's data (serial connection)
-
+#publisher for the rokubi serial sensor 
+#this publisher use directly the serial conexion to decode and read the sensor data, removed the offset, and publishes them in a topic 
 import rospy
 from geometry_msgs.msg import WrenchStamped
 import serial
@@ -16,7 +15,7 @@ HEADER = 0xAA
 FRAME_SIZE = 1 + 2 + 6*4 + 4 + 4 + 2
 
 class BotaForceTorqueSensorComm:
-    def __init__(self, port="/dev/ttyUSB0", baudrate=460800):
+    def __init__(self, port="/dev/ttyUSB0", baudrate=460800):   #put the correct port
         self.ser = serial.Serial(port, baudrate, timeout=0.1)
         self.crc_error_count = 0
 
@@ -129,14 +128,13 @@ if __name__ == "__main__":
             if forces:
                 msg = WrenchStamped()
                 msg.header.stamp = rospy.Time.now()
-                msg.header.frame_id = "fake_gripper"  # sans doute inutile 
+                msg.header.frame_id = "fake_gripper"  # useless
                 msg.wrench.force.x = forces[0]-zero_force[0]
                 msg.wrench.force.y = forces[1]-zero_force[1]
                 msg.wrench.force.z = forces[2]-zero_force[2]
                 msg.wrench.torque.x = forces[3]-zero_force[3]
                 msg.wrench.torque.y = forces[4]-zero_force[4]
                 msg.wrench.torque.z = forces[5]-zero_force[5]
-                # rospy.loginfo(f"Forces: {round(forces[0],1)}, {round(forces[1],1)}, {round(forces[2],1)}")
                 pub.publish(msg)
             rate.sleep()
     except rospy.ROSInterruptException:
