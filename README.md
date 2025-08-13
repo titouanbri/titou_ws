@@ -28,14 +28,14 @@ In bota\_driver/rokubi\_ethercat/rokubi\_ethercat.launch:
 * Change the IP of the sensor if the driver asks for it
 * ChatGPT for errors
 
-## Final command to start acquisition (runs with setup.launch)
+# Final command to start acquisition (runs with setup.launch)
 
 * roslaunch rokubimini\_ethercat rokubimini\_ethercat.launch
 
 ## Launch
 
 * Command to start UR driver + EtherCAT driver (modify with the correct robot info): roslaunch carnicero setup.launch
-* Command to start admittance: rosrun carnicero sensor\_test.py (make sure to wait until both sensors are marked “OK” in the terminal)
+* Command to start admittance: rosrun carnicero admittance.py (make sure to wait until both sensors are marked “OK” in the terminal)
 
 ## Path to scripts/launch used:
 
