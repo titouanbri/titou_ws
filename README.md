@@ -41,6 +41,8 @@ In bota\_driver/rokubi\_ethercat/rokubi\_ethercat.launch:
 
 \~/catkin\_ws/src/universal\_robot/carnicero
 
+there are publisher for the rokubi serial and ethercat, and the admittance code. there are also codes for data acquisition and for the Onrobot ethercat sensor. "force_sensor_eth_publisher.py" is the only one to use the rokubi ethercat sensor.
+
 # Important 
 Because of several hardware problems, There might be changes in the script depending on which is the last configuration used, if there are problems don't hesitate to contact the autors.
 
