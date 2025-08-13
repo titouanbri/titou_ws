@@ -17,25 +17,26 @@
     
 
 - installation : https://gitlab.com/botasys/bota_driver.git bota_driver si jamais ça marche pas
-- chat gpt pour les erreurs 
+- sudo apt install ros-noetic-ethercat-grant
 
 - echo "/opt/ros/noetic/lib" | sudo tee /etc/ld.so.conf.d/ros-noetic.conf
 - sudo ldconfig 
 
+dans bota_driver/rokubi_ethercat/rokubi_ethercat.launch :
+- changer l'ip du capteur si jamais le driver le demande
+- chat gpt pour les erreurs
 
-- changer le nom du port 
-- changer nom du capteur dans le launch 
 ## Commande finale pour lancer l'acquisition ( se lance avec setup.launch )
 - roslaunch rokubimini_ethercat rokubimini_ethercat.launch
 
 ## Lancement
 
-- commande pour lancer driver UR + driver ethercat ( à modifier avec les infos du bon robot) : roslaunch force_sensor_node setup.launch
-- commande pour lancer l'admittance : rosrun force_sensor_node sensor_test.py (bien attendre que les 2 capteurs soient marqués "OK" dans le terminal)
+- commande pour lancer driver UR + driver ethercat ( à modifier avec les infos du bon robot) : roslaunch carnicero setup.launch
+- commande pour lancer l'admittance : rosrun carnicero sensor_test.py (bien attendre que les 2 capteurs soient marqués "OK" dans le terminal)
 
 
-## chemin des fichiers utilisés :
-~/catkin_ws/src/universal_robot/force_sensor_node
+## chemin des scripts/launch utilisés :
+~/catkin_ws/src/universal_robot/carnicero
 
 ## mail du goat, du "broyeur de pins", "foudroyeur d'ur30" :
 titouan.briancon@sigma-clermont.fr
