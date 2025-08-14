@@ -1,45 +1,56 @@
 # UR30-admittance
 
-## Connecter le robot
-- dans paramètre/réseau/filaire/IPV4/manuel : mettre dans "adresse" le même IP que le robot, en changeant le dernier chiffre donc 192.168.3.20X avec X différent de 0 et masque de réseau = 255.255.255.0
+## Connect the robot
 
-## Étapes pour configurer le pc pour travailler avec l’ur30 et faire fonctionner l’admittance 
+* In settings/network/wired/IPv4/manual: set the "address" to the same IP as the robot, changing only the last digit, e.g., 192.168.3.20X with X different from 0, and set the subnet mask to 255.255.255.0
 
-- remplacer « titouan » par username avec vscode (dans ws), ctrl maj f
-- sudo apt update
-- sudo apt install ros-noetic-desktop-full (suivre un tuto pour installer ros)
-- sudo apt install ros-noetic-soem      
-- pip install --upgrade scipy
-- sudo apt install ros-noetic-kdl-parser-py
+## Steps to configure the PC to work with the UR30 and run the admittance
+
+* Replace “titouan” with username using vscode (in ws), ctrl shift f
+* sudo apt update
+* sudo apt install ros-noetic-desktop-full (follow a tutorial to install ROS)
+* sudo apt install ros-noetic-soem
+* pip install --upgrade scipy
+* sudo apt install ros-noetic-kdl-parser-py
+
+## Steps for the EtherCAT sensor
+
+* Installation: [https://gitlab.com/botasys/bota\_driver.git](https://gitlab.com/botasys/bota_driver.git) bota\_driver if it doesn’t work otherwise
+
+* sudo apt install ros-noetic-ethercat-grant
+
+* echo "/opt/ros/noetic/lib" | sudo tee /etc/ld.so.conf.d/ros-noetic.conf
+
+* sudo ldconfig
+
+In bota\_driver/rokubi\_ethercat/rokubi\_ethercat.launch:
+
+* Change the IP of the sensor if the driver asks for it
+* ChatGPT for errors
+
+### Final command to start acquisition (runs with setup.launch)
+
+* roslaunch rokubimini\_ethercat rokubimini\_ethercat.launch
+
+## Launch
+
+* Command to start UR driver + EtherCAT driver (modify with the correct robot info): roslaunch carnicero setup.launch
+* Command to start admittance: rosrun carnicero admittance.py (make sure to wait until both sensors are marked “OK” in the terminal)
+
+## Path to scripts/launch used:
+
+\~/catkin\_ws/src/universal\_robot/carnicero
+
+There are publisher for the rokubi serial and ethercat, and the admittance code. there are also codes for data acquisition and for the Onrobot ethercat sensor. "force_sensor_eth_publisher.py" is the only one to use the rokubi ethercat sensor.
 
 
-## Etapes pour le capteur ethercat
-    
+# Important 
+Because of several hardware problems, There might be changes in the script depending on which is the last configuration used, if there are problems don't hesitate to contact the autors.
 
-- installation : https://gitlab.com/botasys/bota_driver.git bota_driver si jamais ça marche pas
-- sudo apt install ros-noetic-ethercat-grant
+## Email of the GOAT, “UR30 pin crusher”, “UR30 thunderstriker”:
 
-- echo "/opt/ros/noetic/lib" | sudo tee /etc/ld.so.conf.d/ros-noetic.conf
-- sudo ldconfig 
+[titouan.briancon@sigma-clermont.fr](mailto:titouan.briancon@sigma-clermont.fr)
 
-dans bota_driver/rokubi_ethercat/rokubi_ethercat.launch :
-- changer l'ip du capteur si jamais le driver le demande
-- chat gpt pour les erreurs
+## Email of the “demagnetizer”, “Bota crumpler”:
 
-## Commande finale pour lancer l'acquisition ( se lance avec setup.launch )
-- roslaunch rokubimini_ethercat rokubimini_ethercat.launch
-
-## Lancement
-
-- commande pour lancer driver UR + driver ethercat ( à modifier avec les infos du bon robot) : roslaunch carnicero setup.launch
-- commande pour lancer l'admittance : rosrun carnicero sensor_test.py (bien attendre que les 2 capteurs soient marqués "OK" dans le terminal)
-
-
-## chemin des scripts/launch utilisés :
-~/catkin_ws/src/universal_robot/carnicero
-
-## mail du goat, du "broyeur de pins", "foudroyeur d'ur30" :
-titouan.briancon@sigma-clermont.fr
-
-## mail du "démagnétiseur", "froisseur de Bota" :
-matteo.proverbio@sigma-clermont.fr
+[matteo.proverbio@sigma-clermont.fr](mailto:matteo.proverbio@sigma-clermont.fr)

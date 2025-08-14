@@ -165,11 +165,14 @@ include_directories(
 # )
 catkin_install_python(PROGRAMS
   scripts/force_sensor_publisher.py
-  scripts/sensor_test.py
-  scripts/sensor_test_planC.py
+  scripts/admittance.py
+  scripts/admittance_planC.py
   scripts/force_sensor_eth_publisher.py
   scripts/data.py
   scripts/data2.py
+  scripts/ros_ft_publisher.py
+  scripts/ros_ft_publisher_pysoem.py
+  scripts/new_and_last_method_eth.py
   DESTINATION ${CATKIN_PACKAGE_BIN_DESTINATION}
 )
 

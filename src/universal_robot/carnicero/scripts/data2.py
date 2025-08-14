@@ -51,7 +51,7 @@ class WrenchAndCameraLogger:
         rospy.init_node('data', anonymous=True)
 
         # ------------------ Paramètres ------------------
-        self.duration = rospy.get_param('~duration', 5)
+        self.duration = rospy.get_param('~duration', 50)
         self.base_frame = rospy.get_param('~base_frame', 'base_link')
         self.ee_frame = rospy.get_param('~ee_frame', 'tool0')
         self.pose_topic = rospy.get_param('~ee_pose_topic', '/ee_pose')
@@ -86,7 +86,11 @@ class WrenchAndCameraLogger:
             'ee_x', 'ee_y', 'ee_z',
             'ee_qx', 'ee_qy', 'ee_qz', 'ee_qw',
             # Arduino
-            'R1', 'R2', 'R3', 'R4', 'R5', 'R6'
+            'R1', 'R2', 'R3', 'R4', 'R5', 'R6',
+            # Onrobot
+            'OR_x','OR_y','OR_z',
+            'OR_rx','OR_ry','OR_rz'
+
         ])
 
         # Vidéo & images
@@ -109,7 +113,8 @@ class WrenchAndCameraLogger:
         # EtherCAT wrench (valeurs courantes)
         self.eth_force = np.array([np.nan, np.nan, np.nan], dtype=np.float32)
         self.eth_torque = np.array([np.nan, np.nan, np.nan], dtype=np.float32)
-
+        self.OR_force = np.array([np.nan, np.nan, np.nan], dtype=np.float32)
+        self.OR_torque = np.array([np.nan, np.nan, np.nan], dtype=np.float32)
         # Threads
         self.serial_thread = None
         self.serial_running = False
@@ -128,7 +133,9 @@ class WrenchAndCameraLogger:
 
         # ------------------ ROS Comm ------------------
         rospy.Subscriber('/wrench', WrenchStamped, self.wrench_callback)
-        rospy.Subscriber('/force_sensor_eth', WrenchStamped, self.eth_callback)
+        # rospy.Subscriber('/force_sensor_eth', WrenchStamped, self.eth_callback)
+        rospy.Subscriber('/bus0/ft_sensor0/ft_sensor_readings/wrench', WrenchStamped, self.eth_callback)
+        rospy.Subscriber('/ft_sensor', WrenchStamped, self.OR_callback)
         rospy.Subscriber(self.pose_topic, PoseStamped, self.pose_callback)
 
         rospy.Timer(rospy.Duration(self.duration), self.stop_recording, oneshot=True)
@@ -254,6 +261,15 @@ class WrenchAndCameraLogger:
         self.eth_torque = np.array([msg.wrench.torque.x,
                                     msg.wrench.torque.y,
                                     msg.wrench.torque.z], dtype=np.float32)
+        
+    def OR_callback(self, msg: WrenchStamped):
+        # Met à jour les valeurs EtherCAT
+        self.OR_force = np.array([msg.wrench.force.x,
+                                   msg.wrench.force.y,
+                                   msg.wrench.force.z], dtype=np.float32)
+        self.OR_torque = np.array([msg.wrench.torque.x,
+                                    msg.wrench.torque.y,
+                                    msg.wrench.torque.z], dtype=np.float32)
 
     def _log_data(self, msg: WrenchStamped, source='wrench'):
         if self.csv_file.closed:
@@ -294,7 +310,10 @@ class WrenchAndCameraLogger:
             np.float32(px), np.float32(py), np.float32(pz),
             np.float32(qx), np.float32(qy), np.float32(qz), np.float32(qw),
             # Arduino
-            *[np.float32(val) for val in R]
+            *[np.float32(val) for val in R],
+            #Onrobot
+            *self.OR_force.tolist(),
+            *self.OR_torque.tolist()
         ]
         self.csv_writer.writerow(row)
 
