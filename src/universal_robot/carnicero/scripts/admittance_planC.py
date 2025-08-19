@@ -54,7 +54,7 @@ class admittance_control(object):
         self.tf_buffer = tf2_ros.Buffer()
         self.tf_listener = tf2_ros.TransformListener(self.tf_buffer)
 
-        self.force_data = None  # pour stocker la dernière donnée
+        self.force_data = None  
         self.joint_state = None
 
         rospy.Subscriber('/force_sensor_eth', WrenchStamped, self.force_callback) # sensor used to acquire forces 
@@ -271,13 +271,13 @@ class admittance_control(object):
         rospy.loginfo("Starting full-body admittance control (6D: position + orientation via torque)...")
 
         # Admittance parameters
-        c=13
-        M = 6; B = c*M; K = 0        # translation
-        M_rot = 0.06; B_rot = c*M_rot ; K_rot = 0  # rotation
+        c=16
+        M = 10; B = c*M; K = 0        # translation
+        M_rot = 0.07; B_rot = c*M_rot ; K_rot = 0  # rotation
 
 
 
-        frequence=350 #Hz       be sure that this frequency is stable on your computer, use "rostopic hz /topic_name"
+        frequence=500 #Hz       be sure that this frequency is stable on your computer, use "rostopic hz /topic_name"
         dt =1/frequence
         force_dead_zone_cart = 0.05  # avoid useless publishment
         force_dead_zone_rot = 0.003

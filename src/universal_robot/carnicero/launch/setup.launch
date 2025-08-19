@@ -2,9 +2,9 @@
 
 
 <launch>
-    <arg name="robot_ip" value="192.168.56.2" />
+    <arg name="robot_ip" value="192.168.3.200" />
 
-    <include file="$(find ur_robot_driver)/launch/ur5e_bringup.launch">
+    <include file="$(find ur_robot_driver)/launch/ur30_bringup.launch">
         <arg name="robot_ip" value="$(arg robot_ip)" />
     </include>
 

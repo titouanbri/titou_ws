@@ -28,7 +28,7 @@ In bota\_driver/rokubi\_ethercat/rokubi\_ethercat.launch:
 * Change the IP of the sensor if the driver asks for it
 * ChatGPT for errors
 
-### Final command to start acquisition (runs with setup.launch)
+### Final command to start acquisition of the ethercat sensor (runs with setup.launch)
 
 * roslaunch rokubimini\_ethercat rokubimini\_ethercat.launch
 

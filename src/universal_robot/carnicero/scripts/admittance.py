@@ -52,10 +52,10 @@ class admittance_control(object):
         self.tf_buffer = tf2_ros.Buffer()
         self.tf_listener = tf2_ros.TransformListener(self.tf_buffer)
 
-        self.force_data = None  # pour stocker la dernière donnée
+        self.force_data = None 
         self.joint_state = None
 
-        rospy.Subscriber('/force_sensor_eth', WrenchStamped, self.force_callback_eth) # sensor used to acquire forces 
+        rospy.Subscriber('/force_sensor_eth', WrenchStamped, self.force_callback) # sensor used to acquire forces 
         rospy.Subscriber("/joint_states", JointState, self.joint_state_callback)
 
 
@@ -97,11 +97,9 @@ class admittance_control(object):
         self.x_k = np.zeros(6)
         self.a_k = np.zeros(6)
 
+
     def force_callback(self, msg):
         self.force_data = msg
-
-    def force_callback_eth(self, msg):
-        self.force_data_eth = msg
 
     def joint_state_callback(self, msg):
         self.joint_state = msg
@@ -266,15 +264,15 @@ class admittance_control(object):
 
         # Admittance parameters
         c=15
-        M = 3.5; B = c*M; K = 0        # translation
+        M = 8; B = c*M; K = 0        # translation
         M_rot = 0.07; B_rot = c*M_rot ; K_rot = 0  # rotation
-        frequence=400 #Hz   be sure that this frequency is stable on your computer, use "rostopic hz /topic_name"
+        frequence=500 #Hz   be sure that this frequency is stable on your computer, use "rostopic hz /topic_name"
         dt =1/frequence
-        force_dead_zone_cart = 0.05  # eviter de publier pour rien
+        force_dead_zone_cart = 0.05  # avoid useless publishment
         force_dead_zone_rot = 0.003
         F_alpha = 0.02  # force exponential low-pass filter (close to 0 = slow response but strong filtering)
         joint_velocity_smoothed = None  
-        V_alpha = 0.06  # velocity exponential low-pass filter (close to 0 = slow response but strong filtering)
+        V_alpha = 0.15  # velocity exponential low-pass filter (close to 0 = slow response but strong filtering)
 
     
         filtered_force = np.zeros(6)
@@ -286,7 +284,7 @@ class admittance_control(object):
         joint_names = ['shoulder_pan_joint', 'shoulder_lift_joint', 'elbow_joint', 'wrist_1_joint', 'wrist_2_joint', 'wrist_3_joint']
         vel_msg= Float64MultiArray()
         vel_msg.data=[0,0,0,0,0,0]
-
+        lambda_dls = 0.015   # damping of the close singularity accelerations : Higher value = more damping, less speed
         
 
 
@@ -326,6 +324,8 @@ class admittance_control(object):
             if self.force_data is None:
                 rate.sleep()
                 continue 
+
+        
 
             if self.joint_state is None:
                 rate.sleep()
@@ -394,7 +394,15 @@ class admittance_control(object):
 
 
             ee_vel = self.v_k
-            joint_velocities = np.linalg.pinv(jacobian).dot(ee_vel)
+
+            #damping of singularity accelerations 
+
+            U, S, Vt = np.linalg.svd(jacobian, full_matrices=False)
+            S_damped = S / (S**2 + lambda_dls**2)
+            J_pinv_dls = Vt.T.dot(np.diag(S_damped)).dot(U.T)
+            joint_velocities = J_pinv_dls.dot(ee_vel)
+
+
 
             #Exponential filter on the velocity to be published
             if joint_velocity_smoothed is None:
@@ -435,14 +443,14 @@ def main():
         print("node initialisation")
 
         # useful is you use a special publisher for the forces, to be sure that it's closed before launching it
-        os.system("pkill -f force_sensor_publisher.py")
+        # os.system("pkill -f force_sensor_publisher.py")
         os.system("pkill -f force_sensor_eth_publisher.py")
 
 
         admittance=admittance_control()
 
         # launching the force publisher 
-        subprocess.Popen(["rosrun", "carnicero", "force_sensor_publisher.py"])
+        # subprocess.Popen(["rosrun", "carnicero", "force_sensor_publisher.py"])
         subprocess.Popen(["rosrun", "carnicero", "force_sensor_eth_publisher.py"])
 
 
