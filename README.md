@@ -8,7 +8,7 @@
 
 * Replace “titouan” with username using vscode (in ws), ctrl shift f
 * sudo apt update
-* sudo apt install ros-noetic-desktop-full (follow a tutorial to install ROS)
+* follow this tuto and install the full version of ros : https://www.youtube.com/watch?v=Qk4vLFhvfbI&list=PLLSegLrePWgIbIrA4iehUQ-impvIXdd9Q
 * sudo apt install ros-noetic-soem
 * pip install --upgrade scipy
 * sudo apt install ros-noetic-kdl-parser-py
