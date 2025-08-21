@@ -9,17 +9,13 @@
 * follow this tuto and install the full version of ros : https://www.youtube.com/watch?v=Qk4vLFhvfbI&list=PLLSegLrePWgIbIrA4iehUQ-impvIXdd9Q
 * Replace “titouan” with username using vscode (in ws), ctrl shift f
 ```
-
 sudo apt update
-
 ```
 
 ```
-
 rosdep init
 rosdep update
 rosdep install --from-paths src --ignore-src -r -y
-
 ```
 ```
 sudo apt install -y \
@@ -31,21 +27,24 @@ sudo apt install -y \
   ros-noetic-joint-trajectory-controller \
   ros-noetic-soem \
   ros-noetic-ur-client-library \
-  ros-noetic-ethercat-grant
+  ros-noetic-ethercat-grant \
+  ros-noetic-soem \
+  ros-noetic-kdl-parser-py 
 ```
 
-
-* sudo apt install ros-noetic-soem
-* pip install --upgrade scipy
-* sudo apt install ros-noetic-kdl-parser-py
+```
+pip install --upgrade scipy
+```
 
 ## Steps for the EtherCAT sensor
 
 * Installation: [https://gitlab.com/botasys/bota\_driver.git](https://gitlab.com/botasys/bota_driver.git) bota\_driver if it doesn’t work otherwise
-
-* echo "/opt/ros/noetic/lib" | sudo tee /etc/ld.so.conf.d/ros-noetic.conf
-
-* sudo ldconfig
+```
+echo "/opt/ros/noetic/lib" | sudo tee /etc/ld.so.conf.d/ros-noetic.conf
+```
+```
+sudo ldconfig
+```
 
 In bota\_driver/rokubi\_ethercat/rokubi\_ethercat.launch:
 
@@ -53,17 +52,25 @@ In bota\_driver/rokubi\_ethercat/rokubi\_ethercat.launch:
 * ChatGPT for errors
 
 ### Final command to start acquisition of the ethercat sensor (runs with setup.launch)
-
-* roslaunch rokubimini\_ethercat rokubimini\_ethercat.launch
-
+```
+roslaunch rokubimini\_ethercat rokubimini\_ethercat.launch
+```
 ## Launch
 
-* Command to start UR driver + EtherCAT driver (modify with the correct robot info): roslaunch carnicero setup.launch
-
+* Command to start UR driver + EtherCAT driver (modify with the correct robot info): 
+```
+roslaunch carnicero setup.launch
+```
 In both node there is an offset problem due to the default sensor offset, the force sensor publisher make a "fake" calibration, so the robot could drift. If the robot drifts, you have to restart the node. 
-* Command to start admittance: rosrun carnicero admittance.py (make sure to wait until both sensors are marked “OK” in the terminal) (slower with 300/400 Hz)
-* there is also the cpp version : rosrun carnicero admittance_control_node   (faster with more than 3000 Hz)
+* Command to start admittance: (make sure to wait until both sensors are marked “OK” in the terminal) (slower with 300/400 Hz)
+```
+rosrun carnicero admittance.py 
+```
 
+* there is also the cpp version : 
+```
+rosrun carnicero admittance_control_node   (faster with more than 3000 Hz)
+```
 ## Path to scripts/launch used:
 
 \~/catkin\_ws/src/universal\_robot/carnicero
