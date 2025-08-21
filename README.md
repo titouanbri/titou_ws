@@ -8,11 +8,21 @@
 
 * follow this tuto and install the full version of ros : https://www.youtube.com/watch?v=Qk4vLFhvfbI&list=PLLSegLrePWgIbIrA4iehUQ-impvIXdd9Q
 * Replace “titouan” with username using vscode (in ws), ctrl shift f
-* sudo apt update
-* rosdep init
-* rosdep update
-* rosdep install --from-paths src --ignore-src -r -y
-* sudo apt install -y \
+```
+
+sudo apt update
+
+```
+
+```
+
+rosdep init
+rosdep update
+rosdep install --from-paths src --ignore-src -r -y
+
+```
+```
+sudo apt install -y \
   ros-noetic-trac-ik-kinematics-plugin \
   ros-noetic-realtime-tools \
   ros-noetic-controller-manager \
@@ -22,6 +32,7 @@
   ros-noetic-soem \
   ros-noetic-ur-client-library \
   ros-noetic-ethercat-grant
+```
 
 
 * sudo apt install ros-noetic-soem
