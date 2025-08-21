@@ -103,6 +103,7 @@ find_package(catkin REQUIRED COMPONENTS
 ## CATKIN_DEPENDS: catkin_packages dependent projects also need
 ## DEPENDS: system dependencies of this project that dependent projects also need
 catkin_package(
+  CATKIN_DEPENDS rospy std_msgs
 #  INCLUDE_DIRS include
 #  LIBRARIES bb
 #  CATKIN_DEPENDS geometry_msgs rospy std_msgs
