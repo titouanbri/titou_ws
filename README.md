@@ -6,9 +6,24 @@
 
 ## Steps to configure the PC to work with the UR30 and run the admittance
 
+* follow this tuto and install the full version of ros : https://www.youtube.com/watch?v=Qk4vLFhvfbI&list=PLLSegLrePWgIbIrA4iehUQ-impvIXdd9Q
 * Replace “titouan” with username using vscode (in ws), ctrl shift f
 * sudo apt update
-* follow this tuto and install the full version of ros : https://www.youtube.com/watch?v=Qk4vLFhvfbI&list=PLLSegLrePWgIbIrA4iehUQ-impvIXdd9Q
+* rosdep init
+* rosdep update
+* rosdep install --from-paths src --ignore-src -r -y
+* sudo apt install -y \
+  ros-noetic-trac-ik-kinematics-plugin \
+  ros-noetic-realtime-tools \
+  ros-noetic-controller-manager \
+  ros-noetic-robot-state-publisher \
+  ros-noetic-tf-conversions \
+  ros-noetic-joint-trajectory-controller \
+  ros-noetic-soem \
+  ros-noetic-ur-client-library \
+  ros-noetic-ethercat-grant
+
+
 * sudo apt install ros-noetic-soem
 * pip install --upgrade scipy
 * sudo apt install ros-noetic-kdl-parser-py
@@ -16,8 +31,6 @@
 ## Steps for the EtherCAT sensor
 
 * Installation: [https://gitlab.com/botasys/bota\_driver.git](https://gitlab.com/botasys/bota_driver.git) bota\_driver if it doesn’t work otherwise
-
-* sudo apt install ros-noetic-ethercat-grant
 
 * echo "/opt/ros/noetic/lib" | sudo tee /etc/ld.so.conf.d/ros-noetic.conf
 
