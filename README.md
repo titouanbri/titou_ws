@@ -35,6 +35,8 @@ In bota\_driver/rokubi\_ethercat/rokubi\_ethercat.launch:
 ## Launch
 
 * Command to start UR driver + EtherCAT driver (modify with the correct robot info): roslaunch carnicero setup.launch
+
+In both node there is an offset problem due to the default sensor offset, the force sensor publisher make a "fake" calibration, so the robot could drift. If the robot drifts, you have to restart the node. 
 * Command to start admittance: rosrun carnicero admittance.py (make sure to wait until both sensors are marked “OK” in the terminal) (slower with 300/400 Hz)
 * there is also the cpp version : rosrun carnicero admittance_control_node   (faster with more than 3000 Hz)
 
