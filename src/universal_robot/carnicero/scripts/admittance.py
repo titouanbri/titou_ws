@@ -266,11 +266,11 @@ class admittance_control(object):
         c=15
         M = 8; B = c*M; K = 0        # translation
         M_rot = 0.07; B_rot = c*M_rot ; K_rot = 0  # rotation
-        frequence=500 #Hz   be sure that this frequency is stable on your computer, use "rostopic hz /topic_name"
+        frequence=350 #Hz   be sure that this frequency is stable on your computer, use "rostopic hz /topic_name"
         dt =1/frequence
         force_dead_zone_cart = 0.05  # avoid useless publishment
         force_dead_zone_rot = 0.003
-        F_alpha = 0.02  # force exponential low-pass filter (close to 0 = slow response but strong filtering)
+        F_alpha = 0.015  # force exponential low-pass filter (close to 0 = slow response but strong filtering)
         joint_velocity_smoothed = None  
         V_alpha = 0.15  # velocity exponential low-pass filter (close to 0 = slow response but strong filtering)
 

@@ -176,6 +176,17 @@ catkin_install_python(PROGRAMS
   DESTINATION ${CATKIN_PACKAGE_BIN_DESTINATION}
 )
 
+
+find_package(catkin REQUIRED COMPONENTS
+  roscpp geometry_msgs std_msgs sensor_msgs controller_manager_msgs
+  tf2_ros tf2_geometry_msgs urdf kdl_parser
+)
+find_package(orocos_kdl REQUIRED)
+find_package(Eigen3 REQUIRED)
+include_directories(${catkin_INCLUDE_DIRS} ${EIGEN3_INCLUDE_DIRS})
+add_executable(admittance_control_node src/admittance_control.cpp)
+target_link_libraries(admittance_control_node ${catkin_LIBRARIES} ${orocos_kdl_LIBRARIES})
+
 ## Mark executables for installation
 ## See http://docs.ros.org/melodic/api/catkin/html/howto/format1/building_executables.html
 # install(TARGETS ${PROJECT_NAME}_node
