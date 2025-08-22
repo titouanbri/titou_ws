@@ -69,7 +69,7 @@ rosrun carnicero admittance.py
 
 * there is also the cpp version : 
 ```
-rosrun carnicero admittance_control_node   (faster with more than 3000 Hz)
+rosrun carnicero admittance_control_node   (faster with more than 3000 Hz, but the UR robot driver can handle 500 Hz maximum)
 ```
 ## Path to scripts/launch used:
 

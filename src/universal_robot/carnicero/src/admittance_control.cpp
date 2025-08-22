@@ -140,7 +140,7 @@ public:
     const double c = 12.0;
     const double M = 6.0, B = c*M, K = 0.0;            // translation
     const double M_rot = 0.06, B_rot = c*M_rot, K_rot = 0.0; // rotation
-    const double freq = 4000.0; // Hz
+    const double freq = 1000.0; // Hz
     const double dt = 1.0 / freq;
 
     const double force_dead_cart = 0.08;
