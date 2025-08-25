@@ -30,7 +30,8 @@ sudo apt install -y \
   ros-noetic-ethercat-grant \
   ros-noetic-soem \
   ros-noetic-kdl-parser-py \
-  python3-pip
+  python3-pip \
+  ros-noetic-industrial-msgs
 ```
 
 ```
