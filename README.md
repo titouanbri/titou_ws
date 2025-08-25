@@ -31,7 +31,8 @@ sudo apt install -y \
   ros-noetic-soem \
   ros-noetic-kdl-parser-py \
   python3-pip \
-  ros-noetic-industrial-msgs
+  ros-noetic-industrial-msgs \
+  ros-noetic-xacro
 ```
 
 ```
