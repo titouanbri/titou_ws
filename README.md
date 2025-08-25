@@ -7,7 +7,6 @@
 ## Steps to configure the PC to work with the UR30 and run the admittance
 
 * follow this tuto and install the full version of ros : https://www.youtube.com/watch?v=Qk4vLFhvfbI&list=PLLSegLrePWgIbIrA4iehUQ-impvIXdd9Q
-* Replace “titouan” with username using vscode (in ws), ctrl shift f
 ```
 sudo apt update
 ```
@@ -15,7 +14,7 @@ sudo apt update
 ```
 rosdep init
 rosdep update
-cd catkin_ws/ #or the name you gave to the ws
+cd titou_ws/ #or the name you gave to the ws
 rosdep install --from-paths src --ignore-src -r -y
 ```
 ```
@@ -30,13 +29,14 @@ sudo apt install -y \
   ros-noetic-ur-client-library \
   ros-noetic-ethercat-grant \
   ros-noetic-soem \
-  ros-noetic-kdl-parser-py 
+  ros-noetic-kdl-parser-py \
+  python3-pip
 ```
 
 ```
 pip install --upgrade scipy
 ```
-
+* Replace “titouan” with username using vscode (in ws), ctrl shift f
 ## Steps for the EtherCAT sensor
 
 * Installation: [https://gitlab.com/botasys/bota\_driver.git](https://gitlab.com/botasys/bota_driver.git) bota\_driver if it doesn’t work otherwise
