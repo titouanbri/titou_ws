@@ -34,7 +34,11 @@ sudo apt install -y \
   ros-noetic-industrial-msgs \
   ros-noetic-xacro \
   ros-noetic-moveit \
+<<<<<<< HEAD
   ros-noetic-joint-state-publisher
+=======
+  ros-noetic-gazebo-ros-pkgs ros-noetic-gazebo-ros-control ros-noetic-gazebo-plugins
+>>>>>>> 917a03b4c5aa4b3a071230e44b697b7771c40ba5
 ```
 
 ```
