@@ -33,7 +33,8 @@ sudo apt install -y \
   python3-pip \
   ros-noetic-industrial-msgs \
   ros-noetic-xacro \
-  ros-noetic-moveit
+  ros-noetic-moveit \
+  ros-noetic-gazebo-ros-pkgs ros-noetic-gazebo-ros-control ros-noetic-gazebo-plugins
 ```
 
 ```
