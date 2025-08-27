@@ -173,6 +173,8 @@ catkin_install_python(PROGRAMS
   scripts/ros_ft_publisher.py
   scripts/ros_ft_publisher_pysoem.py
   scripts/new_and_last_method_eth.py
+  scripts/joystick_ur30.py
+  scripts/joysticks_publisher.py
   DESTINATION ${CATKIN_PACKAGE_BIN_DESTINATION}
 )
 
