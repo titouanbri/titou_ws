@@ -1,470 +1,315 @@
 #!/usr/bin/env python
 from __future__ import print_function
-from six.moves import input
 import numpy as np
-import sys
-import copy
 import rospy
-import geometry_msgs.msg
-from ur_msgs.srv import SetIO  
-from geometry_msgs.msg import WrenchStamped  
 from std_msgs.msg import Float64MultiArray
-from collections import deque
-import tf.transformations as tf_trans
-from geometry_msgs.msg import Quaternion
-from tf.transformations import quaternion_multiply, quaternion_inverse
 import tf2_ros
-import tf2_geometry_msgs
-from scipy.spatial.transform import Rotation as R
-from scipy.signal import butter, lfilter_zi, lfilter, filtfilt
-from geometry_msgs.msg import WrenchStamped, Wrench, Vector3
-from controller_manager_msgs.srv import SwitchController
+from tf.transformations import quaternion_multiply, quaternion_inverse
 from sensor_msgs.msg import JointState
+from geometry_msgs.msg import PointStamped
 from urdf_parser_py.urdf import URDF
 import PyKDL
 from kdl_parser_py.urdf import treeFromUrdfModel
-import subprocess
-from std_msgs.msg import String
-import os
-import serial
-import time
-from math import sqrt
-from geometry_msgs.msg import PointStamped
+from controller_manager_msgs.srv import SwitchController
 
+# ------------------ utils quaternions ------------------
+def xyzw_to_wxyz(q_xyzw):
+    q = np.asarray(q_xyzw, dtype=float)
+    return np.array([q[3], q[0], q[1], q[2]], dtype=float)
 
+def wxyz_to_xyzw(q_wxyz):
+    q = np.asarray(q_wxyz, dtype=float)
+    return np.array([q[1], q[2], q[3], q[0]], dtype=float)
 
+def quat_err_vec_and_angle(q_ref_wxyz, q_real_wxyz):
+    """
+    q_err = q_ref ⊗ inv(q_real)  (wxyz)
+    Retourne (e_vec ≈ 2*sign(w)*v, angle)
+    """
+    q_err_xyzw = quaternion_multiply(
+        wxyz_to_xyzw(q_ref_wxyz),
+        quaternion_inverse(wxyz_to_xyzw(q_real_wxyz))
+    )
+    q_err_wxyz = xyzw_to_wxyz(q_err_xyzw)
+    w, x, y, z = q_err_wxyz
+    s = 1.0 if w >= 0.0 else -1.0
+    e_vec = 2.0 * s * np.array([x, y, z], dtype=float)
+    angle = 2.0 * np.arccos(np.clip(abs(w), 0.0, 1.0))
+    return e_vec, angle
+
+# ------------------ contrôleur ------------------
 class admittance_control(object):
     def __init__(self):
         rospy.init_node("admittance", anonymous=True)
 
-        group_name = "manipulator"
+        # IMPORTANT: on contrôle et on mesure à la même frame
+        self.tool_frame = "wrist_3_link"
+        self.base_frame = "base_link"
 
         self.tf_buffer = tf2_ros.Buffer()
         self.tf_listener = tf2_ros.TransformListener(self.tf_buffer)
 
-        self.force_data = None 
+        rospy.Subscriber('/right_arm/elbow', PointStamped, self.elbow_cb)
+        rospy.Subscriber('/right_arm/wrist', PointStamped, self.wrist_cb)
+        rospy.Subscriber("/joint_states", JointState, self.joint_state_cb)
+
         self.joint_state = None
+        self.wrist_real = None
+        self.elbow_real = None
 
+        # Référence "latchée"
+        self.ref_pos = None            # [x y z]
+        self.ref_quat_wxyz = None      # [w x y z]
+        self.anchor_wrist = None       # pour détecter le mouvement cible
 
-        rospy.Subscriber('/right_arm/elbow', PointStamped, self.elbow_real_callback) # sensor used to acquire forces 
-        rospy.Subscriber('/right_arm/wrist', PointStamped, self.wrist_real_callback) # sensor used to acquire forces 
-        rospy.Subscriber("/joint_states", JointState, self.joint_state_callback)
+        # Gains et limites
+        self.freq = 350.0
+        self.dt = 1.0 / self.freq
+        self.Kp_pos = 0.5
+        self.Kd_pos = 1.0
+        self.Kp_ori = 1.0
+        self.Kd_ori = 0.5
+        self.lambda_dls = 0.08
+        self.V_alpha = 0.1
+        self.v_lin_max = 0.20     # m/s
+        self.w_ang_max = 1.0      # rad/s
+        self.qdot_max  = 0.8      # rad/s
 
+        # Seuils de MAJ de la consigne (si cible bouge)
+        self.pos_tol_update = 0.005            # 5 mm
+        self.ori_tol_update = np.deg2rad(3.0)  # 3°
+        # Deadbands pour commander zéro
+        self.pos_deadband = 0.002              # 2 mm
+        self.ori_deadband = np.deg2rad(1.0)    # 1°
 
-
-        self.last_R_mat_test=None
-        self.last_Rot=None
-
-
-        self.tool_frame="tool0"
-        self.base_frame="base_link"
-
+        # KDL : chaîne base -> wrist_3_link (même que la pose mesurée)
         robot_description = rospy.get_param("/robot_description")
         robot = URDF.from_xml_string(robot_description)
         ok, tree = treeFromUrdfModel(robot)
-        chain = tree.getChain("base_link", self.tool_frame)  
-
-        self.kdl_chain = chain
+        chain = tree.getChain(self.base_frame, self.tool_frame)
         self.kdl_jnt_to_jac_solver = PyKDL.ChainJntToJacSolver(chain)
-
-
-        
         self.kdl_fk_solver = PyKDL.ChainFkSolverPos_recursive(chain)
 
-        self.correction = R.from_euler('z', -np.pi / 2)  # constant correction for the sensor frame (only for the rokubi serial and ethercat)
+        self.joint_names = ['shoulder_pan_joint','shoulder_lift_joint','elbow_joint',
+                            'wrist_1_joint','wrist_2_joint','wrist_3_joint']
 
-        
-        self.joint_frames = [     # joint frame names (not used but useful to know)
-        'base_link',
-        'shoulder_link',
-        'forearm_link',
-        'wrist_1_link',
-        'wrist_2_link',
-        'wrist_3_link',
-         ]
-        
-        self.button=True
+        self.joint_vel_pub = rospy.Publisher('/joint_group_vel_controller/command',
+                                             Float64MultiArray, queue_size=1)
 
-        self.v_k = np.zeros(6)
-        self.x_k = np.zeros(6)
-        self.a_k = np.zeros(6)
-        self.last_wrist_real=np.zeros(7)
-        self.last_elbow_real=np.zeros(7)
-        self.wrist_real=None
-        self.elbow_real=None
-        self.offset=np.zeros(3)
-        self.buffer_offset=[]
+        self.last_pose_real = None
+        self.qdot_filt = None
 
-    def wrist_real_callback(self, msg):
-        self.wrist_real = np.array([msg.point.x,-msg.point.z,msg.point.y])
+    # ------------------ callbacks ------------------
+    def wrist_cb(self, msg):
+        self.wrist_real = np.array([msg.point.x, -msg.point.z, msg.point.y], dtype=float)
 
+    def elbow_cb(self, msg):
+        self.elbow_real = np.array([msg.point.x, -msg.point.z, msg.point.y], dtype=float)
 
-    def elbow_real_callback(self, msg):
-        self.elbow_real = np.array([msg.point.x,-msg.point.z,msg.point.y])
-
-    def joint_state_callback(self, msg):
+    def joint_state_cb(self, msg):
         self.joint_state = msg
 
+    # ------------------ utilitaires ------------------
+    def get_pose(self, frame):
+        try:
+            tf_stamped = self.tf_buffer.lookup_transform(
+                self.base_frame, frame, rospy.Time(0), rospy.Duration(0.1)
+            )
+            t = tf_stamped.transform.translation
+            r = tf_stamped.transform.rotation
+            return np.array([t.x, t.y, t.z, r.x, r.y, r.z, r.w], dtype=float)  # XYZW
+        except Exception as e:
+            rospy.logwarn("TF fail %s: %s", frame, e)
+            return None
 
+    def quaternion_orientation_BA(self, A, B, axe_reference="z"):
+        # (identique à ta version, renvoie wxyz)
+        from math import sqrt
+        def norm(v): return sqrt(v[0]*v[0] + v[1]*v[1] + v[2]*v[2])
+        def dot(a,b): return a[0]*b[0] + a[1]*b[1] + a[2]*b[2]
+        def cross(a,b): return (a[1]*b[2]-a[2]*b[1], a[2]*b[0]-a[0]*b[2], a[0]*b[1]-a[1]*b[0])
+        def normalize(v):
+            n = norm(v)
+            if n < 1e-12: raise ValueError("Vecteur nul.")
+            return (v[0]/n, v[1]/n, v[2]/n)
+        A = tuple(map(float, A)); B = tuple(map(float, B))
+        b = normalize((A[0]-B[0], A[1]-B[1], A[2]-B[2]))
+        a = {'x':(1,0,0),'y':(0,1,0),'z':(0,0,1)}.get(axe_reference, (0,0,1))
+        eps=1e-8; c = max(-1.0, min(1.0, a[0]*b[0]+a[1]*b[1]+a[2]*b[2]))
+        if c > 1.0 - eps: return np.array([1.0,0.0,0.0,0.0], dtype=float)
+        if c < -1.0 + eps:
+            pick = (1,0,0) if abs(a[0])<0.9 else (0,1,0)
+            axis = cross(a, pick); n = np.linalg.norm(axis)
+            if n < eps: pick=(0,0,1); axis=cross(a,pick); n=np.linalg.norm(axis)
+            axis = (axis[0]/n, axis[1]/n, axis[2]/n)
+            return np.array([0.0, axis[0], axis[1], axis[2]], dtype=float)
+        axis = cross(a, b); w = 1.0 + c
+        q0,q1,q2,q3 = w, axis[0], axis[1], axis[2]
+        qn = np.sqrt(q0*q0+q1*q1+q2*q2+q3*q3)
+        return np.array([q0/qn, q1/qn, q2/qn, q3/qn], dtype=float)
 
-    def init_offset(self):
-        i=0
-
-        while i<5:
+    # ------------------ initialisation offset + latch ------------------
+    def init_offset_and_latch(self):
+        # estime l'offset pour que p_ref = p_real au départ, puis "latch" la consigne
+        buf = []
+        i = 0
+        while i < 5 and not rospy.is_shutdown():
             if self.wrist_real is None:
-                continue
-            self.buffer_offset.append(-self.wrist_real+self.get_joint_positions("wrist_3_link")[:3])
-            i+=1
+                rospy.sleep(0.01); continue
+            x = self.get_pose(self.tool_frame)
+            if x is None:
+                rospy.sleep(0.01); continue
+            buf.append(-self.wrist_real + x[:3])
+            i += 1
+            rospy.sleep(0.01)
 
-        P=np.vstack(self.buffer_offset)
-        self.offset=P.mean(axis=0)
-        print(self.offset)
+        self.offset = np.mean(np.vstack(buf), axis=0) if buf else np.zeros(3)
+        rospy.loginfo("Offset estimé: %s", np.round(self.offset, 4))
 
+        # Latch consigne = pose actuelle -> zéro mouvement au départ
+        x0 = self.get_pose(self.tool_frame)
+        p0 = x0[:3]
+        q0_wxyz = xyzw_to_wxyz(x0[3:])
+        self.ref_pos = self.wrist_real + self.offset
+        self.ref_quat_wxyz = q0_wxyz.copy()     # on fige l’orientation initiale
+        self.anchor_wrist = self.wrist_real.copy()
+        rospy.loginfo("Consigne latched (pos=%s)", np.round(self.ref_pos, 4))
 
-    #function to be sure that the correct controller is launched 
-    def switch_controllers(self,start_list, stop_list):
+    # ------------------ switch contrôleurs ------------------
+    def switch_controllers(self, start_list, stop_list):
         rospy.wait_for_service('/controller_manager/switch_controller')
         try:
             switch_controller = rospy.ServiceProxy('/controller_manager/switch_controller', SwitchController)
             resp = switch_controller(start_controllers=start_list, stop_controllers=stop_list, strictness=1)
             return resp.ok
-        except rospy.ServiceException as e:
-            rospy.logerr(f"Service call failed: {e}")
-            return False
-
-    def start_controller(self,controller_name):
-        rospy.wait_for_service('/controller_manager/switch_controller')
-        try:
-            switch_controller = rospy.ServiceProxy('/controller_manager/switch_controller', SwitchController)
-            resp = switch_controller(start_controllers=[controller_name], stop_controllers=[], strictness=1)
-            if resp.ok:
-                rospy.loginfo(f"Controller '{controller_name}' started.")
-                return True
-            else:
-                rospy.logwarn(f"Failed to start controller '{controller_name}'.")
-                return False
-        except rospy.ServiceException as e:
-            rospy.logerr(f"Service call failed: {e}")
-            return False
-
-
-    def get_joint_positions(self,joint_frame):
-        
-        
-        try:
-            tf_stamped = self.tf_buffer.lookup_transform(
-                self.base_frame,    
-                joint_frame,              
-                rospy.Time(0),
-                rospy.Duration(0.1)
-            )
-            t = tf_stamped.transform.translation
-            r = tf_stamped.transform.rotation
-            positions = np.array([t.x, t.y, t.z, r.x, r.y, r.z, r.w])
         except Exception as e:
-            rospy.logwarn(f"Impossible d'obtenir {joint_frame} : {e}")
-        return positions
+            rospy.logerr("Switch controller fail: %s", e)
+            return False
 
+    # ------------------ boucle principale ------------------
+    def run(self):
+        vel_msg = Float64MultiArray()
+        vel_msg.data = [0,0,0,0,0,0]
 
+        rate = rospy.Rate(self.freq)
+        while not rospy.is_shutdown():
+            if self.joint_state is None or self.wrist_real is None or self.elbow_real is None:
+                rate.sleep(); continue
 
+            # ordre des joints
+            try:
+                q = [self.joint_state.position[self.joint_state.name.index(jn)] for jn in self.joint_names]
+            except ValueError:
+                rate.sleep(); continue
 
+            # Jacobien à wrist_3_link
+            jnt_array = PyKDL.JntArray(len(q))
+            for i, pos in enumerate(q): jnt_array[i] = pos
+            Jkdl = PyKDL.Jacobian(len(q))
+            self.kdl_jnt_to_jac_solver.JntToJac(jnt_array, Jkdl)
+            J = np.array([[Jkdl[i, j] for j in range(Jkdl.columns())] for i in range(6)], dtype=float)
 
-    def quaternion_orientation_BA(self,A, B, axe_reference="z"):
-        """
-        Retourne le quaternion unitaire (w, x, y, z) qui aligne l'axe choisi (+X/+Y/+Z)
-        sur le vecteur BA (de B vers A). Rotation minimale (roll non contraint).
-        
-        A, B : itérables (x, y, z)
-        axe_reference : 'x', 'y' ou 'z'
-        """
-        from math import sqrt
+            # Pose réelle
+            x_real = self.get_pose(self.tool_frame)
+            if x_real is None:
+                rate.sleep(); continue
+            p_real = x_real[:3]
+            q_real_wxyz = xyzw_to_wxyz(x_real[3:])
 
-        # -- Utilitaires locaux
-        def norm(v): return sqrt(v[0]*v[0] + v[1]*v[1] + v[2]*v[2])
-        def dot(a,b): return a[0]*b[0] + a[1]*b[1] + a[2]*b[2]
-        def cross(a,b): 
-            return (a[1]*b[2]-a[2]*b[1], a[2]*b[0]-a[0]*b[2], a[0]*b[1]-a[1]*b[0])
-        def normalize(v):
-            n = norm(v)
-            if n < 1e-12:
-                raise ValueError("Vecteur nul : les points A et B sont confondus.")
-            return (v[0]/n, v[1]/n, v[2]/n)
+            # --------- mise à jour de la consigne si la cible bouge ----------
+            p_tgt = self.wrist_real + self.offset
+            q_tgt_wxyz = self.quaternion_orientation_BA(self.wrist_real, self.elbow_real)
 
-        # -- Préparation des données
-        A = tuple(float(x) for x in A)
-        B = tuple(float(x) for x in B)
-        BA = (A[0]-B[0], A[1]-B[1], A[2]-B[2])
-        b = normalize(BA)
+            # Δ position cible vs consigne actuelle
+            moved_pos = np.linalg.norm(p_tgt - self.ref_pos) > self.pos_tol_update
+            # Δ orientation cible vs consigne actuelle
+            _, ang_diff_consigne = quat_err_vec_and_angle(q_tgt_wxyz, self.ref_quat_wxyz)
+            moved_ori = ang_diff_consigne > self.ori_tol_update
 
-        if axe_reference == "x":
-            a = (1.0, 0.0, 0.0)
-        elif axe_reference == "y":
-            a = (0.0, 1.0, 0.0)
-        elif axe_reference == "z":
-            a = (0.0, 0.0, 1.0)
-        else:
-            raise ValueError("axe_reference doit être 'x', 'y' ou 'z'.")
+            if moved_pos or moved_ori:
+                self.ref_pos = p_tgt
+                self.ref_quat_wxyz = q_tgt_wxyz
+                self.anchor_wrist = self.wrist_real.copy()
+                rospy.loginfo("Nouvelle consigne (Δpos: %s, Δang: %.2f°)",
+                              "oui" if moved_pos else "non",
+                              np.degrees(ang_diff_consigne))
 
-        # -- Cas numériques
-        eps = 1e-8
-        c = max(-1.0, min(1.0, dot(a, b)))  # clamp du cosinus
+            # --------- erreurs par rapport à la consigne latchée ----------
+            e_pos = self.ref_pos - p_real
+            e_ori_vec, e_ori_ang = quat_err_vec_and_angle(self.ref_quat_wxyz, q_real_wxyz)
 
-        # Vecteurs presque identiques -> pas de rotation
-        if c > 1.0 - eps:
-            return (1.0, 0.0, 0.0, 0.0)
-
-        # Vecteurs presque opposés -> rotation de 180° autour d'un axe orthogonal
-        if c < -1.0 + eps:
-            # Choisir un vecteur non-colinéaire pour construire un axe
-            pick = (1.0, 0.0, 0.0) if abs(a[0]) < 0.9 else (0.0, 1.0, 0.0)
-            axis = cross(a, pick)
-            n = norm(axis)
-            if n < eps:  # secours au cas très dégénéré
-                pick = (0.0, 0.0, 1.0)
-                axis = cross(a, pick)
-                n = norm(axis)
-            axis = (axis[0]/n, axis[1]/n, axis[2]/n)
-            return (0.0, axis[0], axis[1], axis[2])
-
-        # -- Cas général : quaternion via demi-angle
-        axis = cross(a, b)
-        w = 1.0 + c
-        q0, q1, q2, q3 = w, axis[0], axis[1], axis[2]
-
-        # Normalisation du quaternion
-        qn = sqrt(q0*q0 + q1*q1 + q2*q2 + q3*q3)
-        return np.array([q0/qn, q1/qn, q2/qn, q3/qn])
-    
-
-    def point_quat_to_euler(self,point, seq='xyz', degrees=False, quat_format='xyzw'):
-        """
-        Convertit un point (x, y, z, q) -> (x, y, z, euler).
-        
-        Parameters
-        ----------
-        point : np.ndarray shape (7,)
-            [x, y, z, q1, q2, q3, q4]
-        seq : str, default 'xyz'
-            Séquence d'Euler (ex. 'xyz', 'zyx', ...). 
-            Requiert SciPy sauf pour le repli 'xyz' (roll-pitch-yaw).
-        degrees : bool, default False
-            True -> angles en degrés, False -> radians.
-        quat_format : {'xyzw','wxyz'}, default 'xyzw'
-            Ordre des composantes du quaternion passé dans `point`.
-        Returns
-        -------
-        np.ndarray shape (6,)
-            [x, y, z, a1, a2, a3] dans l'ordre de `seq`.
-        """
-        p = np.asarray(point, dtype=float)
-        if p.shape != (7,):
-            raise ValueError("`point` doit être un np.array de taille 7 (x,y,z + quaternion).")
-
-        x, y, z = p[:3]
-        q = p[3:]
-
-        if quat_format == 'xyzw':
-            qx, qy, qz, qw = q
-        elif quat_format == 'wxyz':
-            qw, qx, qy, qz = q
-        else:
-            raise ValueError("quat_format doit être 'xyzw' ou 'wxyz'.")
-
-        # Normalisation (sécurité numérique)
-        norm = np.linalg.norm([qw, qx, qy, qz])
-        if not np.isfinite(norm) or norm <= 1e-12:
-            raise ValueError("Quaternion de norme quasi nulle ou invalide.")
-        qw, qx, qy, qz = qw / norm, qx / norm, qy / norm, qz / norm
-
-        # Tentative avec SciPy si dispo (support complet des séquences)
-        try:
-            from scipy.spatial.transform import Rotation as R
-            r = R.from_quat([qx, qy, qz, qw])  # SciPy attend (x, y, z, w)
-            angles = r.as_euler(seq, degrees=degrees)
-        except Exception:
-            # Repli sans SciPy : roll-pitch-yaw (X-Y-Z) uniquement, équivalent à une décomposition ZYX (yaw-pitch-roll)
-            if seq.lower() != 'xyz':
-                raise ImportError(
-                    "SciPy non disponible : le repli ne supporte que seq='xyz' (roll-pitch-yaw). "
-                    "Installe scipy pour d'autres séquences."
+            # vitesses mesurées
+            if self.last_pose_real is None:
+                v_meas = np.zeros(3); w_meas = np.zeros(3)
+            else:
+                v_meas = (p_real - self.last_pose_real[:3]) / self.dt
+                # ω via Δ quaternion
+                _, e_ang_prev = quat_err_vec_and_angle(q_real_wxyz, self.last_pose_real[3:])
+                # petite approximation : on réutilise e_ori_vec précédent si besoin
+                # ici, on recalcule proprement :
+                q_prev = self.last_pose_real[3:]
+                q_delta_xyzw = quaternion_multiply(
+                    wxyz_to_xyzw(q_real_wxyz),
+                    quaternion_inverse(wxyz_to_xyzw(q_prev))
                 )
-            # Formules standard (radians)
-            sinr_cosp = 2 * (qw * qx + qy * qz)
-            cosr_cosp = 1 - 2 * (qx * qx + qy * qy)
-            roll = np.arctan2(sinr_cosp, cosr_cosp)
+                qd_w, qd_x, qd_y, qd_z = xyzw_to_wxyz(q_delta_xyzw)
+                s = 1.0 if qd_w >= 0.0 else -1.0
+                w_meas = (2.0 / self.dt) * s * np.array([qd_x, qd_y, qd_z], dtype=float)
 
-            sinp = 2 * (qw * qy - qz * qx)
-            if abs(sinp) >= 1:
-                pitch = np.pi / 2 * np.sign(sinp)  # verrouillage à ±90°
+            # --------- deadband : si la cible n'a pas bougé et l'erreur est petite -> 0 ---------
+            if (np.linalg.norm(e_pos) < self.pos_deadband) and (e_ori_ang < self.ori_deadband):
+                ee_twist = np.zeros(6)
             else:
-                pitch = np.arcsin(sinp)
+                v_lin = self.Kp_pos * e_pos - self.Kd_pos * v_meas
+                w_ang = self.Kp_ori * e_ori_vec - self.Kd_ori * w_meas
+                v_lin = np.clip(v_lin, -self.v_lin_max, self.v_lin_max)
+                w_ang = np.clip(w_ang, -self.w_ang_max, self.w_ang_max)
+                ee_twist = np.hstack([v_lin, w_ang])
 
-            siny_cosp = 2 * (qw * qz + qx * qy)
-            cosy_cosp = 1 - 2 * (qy * qy + qz * qz)
-            yaw = np.arctan2(siny_cosp, cosy_cosp)
+            # pseudo-inverse amortie
+            U, S, Vt = np.linalg.svd(J, full_matrices=False)
+            S_damped = S / (S**2 + self.lambda_dls**2)
+            J_pinv = Vt.T.dot(np.diag(S_damped)).dot(U.T)
+            qdot = J_pinv.dot(ee_twist)
 
-            angles = np.array([roll, pitch, yaw])
-            if degrees:
-                angles = np.degrees(angles)
-
-        return np.array([x, y, z, *angles])
-
-
-
-
-
-    def admittance_openloop(self) :
-
-        rospy.loginfo("Starting full-body admittance control (6D: position + orientation via torque)...")
-
-        # Admittance parameters
-        frequence=350 #Hz   be sure that this frequency is stable on your computer, use "rostopic hz /topic_name"
-        dt =1/frequence
-        joint_velocity_smoothed = None  
-        V_alpha = 0.01  # velocity exponential low-pass filter (close to 0 = slow response but strong filtering)
-
-    
-        filtered_force = np.zeros(6)
-        smoothed_rel = np.zeros(6)
-
-        joint_names = ['shoulder_pan_joint', 'shoulder_lift_joint', 'elbow_joint', 'wrist_1_joint', 'wrist_2_joint', 'wrist_3_joint']
-        vel_msg= Float64MultiArray()
-        vel_msg.data=[0,0,0,0,0,0]
-        lambda_dls = 0.015   # damping of the close singularity accelerations : Higher value = more damping, less speed
-        Kp = 2     # 1/s  (XYZ | RPY)
-        Ki = 0.1   # 1/s^2
-        Kd =0.6   # -
-        eps=0.1
-        last_x_real=np.zeros(7)
-        
-
-
-
-        
-
-        joint_vel_pub = rospy.Publisher('/joint_group_vel_controller/command', Float64MultiArray, queue_size=1)
-
-
-        rospy.sleep(1.0)
-        rate = rospy.Rate(frequence)
-        
-
-
-        while not rospy.is_shutdown() : #and self.safety():
-
-
-            if self.joint_state is None:
-                rate.sleep()
-                continue  
-
-            #joint positions
-            joint_values = [self.joint_state.position[self.joint_state.name.index(jn)] for jn in joint_names]  #arange l'ordre des joint
-            joint_values_np = np.array(joint_values)
-
-            
-            # computing the jacobian
-            jnt_array = PyKDL.JntArray(len(joint_values))
-            for i, pos in enumerate(joint_values):
-                jnt_array[i] = pos
-
-            fk_frame = PyKDL.Frame()
-            self.kdl_fk_solver.JntToCart(jnt_array, fk_frame)
-            jacobian = PyKDL.Jacobian(len(joint_values))
-            self.kdl_jnt_to_jac_solver.JntToJac(jnt_array, jacobian)
-            jacobian = np.array([[jacobian[i, j] for j in range(jacobian.columns())] for i in range(6)])
-
-
-
-            wrist_r=self.quaternion_orientation_BA(self.wrist_real,self.elbow_real)
-
-            #position mesuré / cible
-            x_real=self.get_joint_positions("wrist_3_link")
-          
-            x_ref=np.concatenate((self.wrist_real+self.offset,wrist_r))
-
-
-            e=x_ref-x_real
-            
-
-            v=(x_real-last_x_real)/dt
-
-            v_cmd=Kp*e+Ki*e*dt-Kd*v
-
-            last_x_real=x_real
-
-            ee_vel = self.point_quat_to_euler(v_cmd,quat_format='wxyz')
-            print(ee_vel)
-
-            #damping of singularity accelerations 
-
-            U, S, Vt = np.linalg.svd(jacobian, full_matrices=False)
-            S_damped = S / (S**2 + lambda_dls**2)
-            J_pinv_dls = Vt.T.dot(np.diag(S_damped)).dot(U.T)
-            joint_velocities = J_pinv_dls.dot(ee_vel)
-
-
-
-            #Exponential filter on the velocity to be published
-            if joint_velocity_smoothed is None:
-                joint_velocity_smoothed = joint_velocities
+            # filtre + saturation
+            if self.qdot_filt is None:
+                self.qdot_filt = qdot
             else:
-                joint_velocity_smoothed = V_alpha * joint_velocities + (1 - V_alpha) * joint_velocity_smoothed
+                self.qdot_filt = self.V_alpha * qdot + (1 - self.V_alpha) * self.qdot_filt
+            self.qdot_filt = np.clip(self.qdot_filt, -self.qdot_max, self.qdot_max)
 
+            vel_msg.data = self.qdot_filt.tolist()
+            self.joint_vel_pub.publish(vel_msg)
 
-            
-
-            
-            vel_msg.data= joint_velocity_smoothed.tolist()
-            joint_vel_pub.publish(vel_msg)
-
-            rospy.loginfo_throttle(0.5, "x_robot: %s | wrist_real: %s", x_real[:3], x_ref[:3])
-
-
-                
-               
-
-
-
+            # log & mémoire
+            self.last_pose_real = np.hstack([p_real, q_real_wxyz])
+            rospy.loginfo_throttle(0.5, "||e_pos||=%.3f mm | e_ang=%.2f deg",
+                                   1000.0*np.linalg.norm(e_pos),
+                                   np.degrees(e_ori_ang))
             rate.sleep()
-        #clean stop with the button
-        values=np.array(vel_msg.data)
-        for _ in range (100) :
-            values= values/1.03               
-            vel_msg.data=values.tolist()
-            joint_vel_pub.publish(vel_msg)
-            rospy.sleep(0.0025)
-            
 
-        vel_msg.data=[0,0,0,0,0,0]
-        joint_vel_pub.publish(vel_msg)
-        
-        
+        # arrêt propre
+        vals = np.array(vel_msg.data, dtype=float)
+        for _ in range(100):
+            vals /= 1.03
+            vel_msg.data = vals.tolist()
+            self.joint_vel_pub.publish(vel_msg)
+            rospy.sleep(0.0025)
+        vel_msg.data = [0]*6
+        self.joint_vel_pub.publish(vel_msg)
+
+# ------------------ main ------------------
 def main():
     try:
-        print("node initialisation")
-
-        admittance=admittance_control()
-        
-        #controller switch (as a precaution)
-        admittance.switch_controllers(['joint_group_vel_controller'], ['scaled_pos_joint_traj_controller'])
-        print("init de l'offset")
-        admittance.init_offset()
-        print("c'est bon")
-
-        #launching the admittance
-        admittance.admittance_openloop()
-
-        print("end of the admittance")
-        
-    except rospy.ROSInterruptException:
-        return
-    except KeyboardInterrupt:
+        ctrl = admittance_control()
+        ctrl.switch_controllers(['joint_group_vel_controller'], ['scaled_pos_joint_traj_controller'])
+        rospy.loginfo("Init offset + latch...")
+        ctrl.init_offset_and_latch()
+        rospy.loginfo("Go.")
+        ctrl.run()
+    except (rospy.ROSInterruptException, KeyboardInterrupt):
         return
 
 if __name__ == "__main__":
     main()
-
-
-          
-
-    
