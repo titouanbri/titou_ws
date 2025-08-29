@@ -175,6 +175,7 @@ catkin_install_python(PROGRAMS
   scripts/new_and_last_method_eth.py
   scripts/joystick_ur30.py
   scripts/joysticks_publisher.py
+  scripts/pacific_rim.py
   DESTINATION ${CATKIN_PACKAGE_BIN_DESTINATION}
 )
 
