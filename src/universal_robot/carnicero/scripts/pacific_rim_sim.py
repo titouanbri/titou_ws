@@ -47,6 +47,19 @@ class admittance_control_sim(admittance_control):
         self.kdl_jnt_to_jac_solver = PyKDL.ChainJntToJacSolver(chain)
         self.kdl_fk_solver = PyKDL.ChainFkSolverPos_recursive(chain)
 
+    def init_offset_and_latch(self):
+        """Wait for the TF tree before running base initialisation."""
+        if not self.tf_buffer.can_transform(
+            self.base_frame,
+            self.tool_frame,
+            rospy.Time(0),
+            rospy.Duration(5.0),
+        ):
+            raise rospy.ROSException(
+                "Transform %s -> %s not available" % (self.base_frame, self.tool_frame)
+            )
+        super(admittance_control_sim, self).init_offset_and_latch()
+
 
 def main():
     try:
