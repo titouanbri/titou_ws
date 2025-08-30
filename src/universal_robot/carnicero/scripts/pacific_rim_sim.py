@@ -5,7 +5,9 @@ This script reuses the logic from ``pacific_rim.py`` but adjusts the
 controlled frame to ``tool0`` which corresponds to the end-effector in
 simulation.  It expects the elbow and wrist positions to be provided on
 ``/right_arm/elbow`` and ``/right_arm/wrist`` (they can be generated with
-``right_arm_constant_publisher.py``).
+``right_arm_constant_publisher.py``).  If the TF tree does not expose a
+transform between ``base_link`` and ``tool0`` the script will publish a
+static transform derived from the URDF so the controller can still start.
 """
 import rospy
 from urdf_parser_py.urdf import URDF
@@ -13,6 +15,8 @@ import PyKDL
 from kdl_parser_py.urdf import treeFromUrdfModel
 import os
 import importlib.util
+import tf2_ros
+from geometry_msgs.msg import TransformStamped
 
 # Try to import the base controller from ``pacific_rim.py``.  In some
 # setups the package path may not expose ``admittance_control`` directly,
@@ -43,9 +47,10 @@ class admittance_control_sim(admittance_control):
         robot_description = rospy.get_param("/robot_description")
         robot = URDF.from_xml_string(robot_description)
         ok, tree = treeFromUrdfModel(robot)
-        chain = tree.getChain(self.base_frame, self.tool_frame)
-        self.kdl_jnt_to_jac_solver = PyKDL.ChainJntToJacSolver(chain)
-        self.kdl_fk_solver = PyKDL.ChainFkSolverPos_recursive(chain)
+        self.kdl_chain = tree.getChain(self.base_frame, self.tool_frame)
+        self.kdl_jnt_to_jac_solver = PyKDL.ChainJntToJacSolver(self.kdl_chain)
+        self.kdl_fk_solver = PyKDL.ChainFkSolverPos_recursive(self.kdl_chain)
+        self.static_tf_broadcaster = tf2_ros.StaticTransformBroadcaster()
 
     def init_offset_and_latch(self):
         """Wait for the TF tree before running base initialisation."""
@@ -55,9 +60,35 @@ class admittance_control_sim(admittance_control):
             rospy.Time(0),
             rospy.Duration(5.0),
         ):
-            raise rospy.ROSException(
-                "Transform %s -> %s not available" % (self.base_frame, self.tool_frame)
-            )
+            # Fallback: publish a static transform derived from the URDF
+            joint_positions = PyKDL.JntArray(self.kdl_chain.getNrOfJoints())
+            frame = PyKDL.Frame()
+            self.kdl_fk_solver.JntToCart(joint_positions, frame)
+
+            t = TransformStamped()
+            t.header.stamp = rospy.Time.now()
+            t.header.frame_id = self.base_frame
+            t.child_frame_id = self.tool_frame
+            t.transform.translation.x = frame.p[0]
+            t.transform.translation.y = frame.p[1]
+            t.transform.translation.z = frame.p[2]
+            qx, qy, qz, qw = frame.M.GetQuaternion()
+            t.transform.rotation.x = qx
+            t.transform.rotation.y = qy
+            t.transform.rotation.z = qz
+            t.transform.rotation.w = qw
+            self.static_tf_broadcaster.sendTransform(t)
+            rospy.sleep(0.1)
+
+            if not self.tf_buffer.can_transform(
+                self.base_frame,
+                self.tool_frame,
+                rospy.Time(0),
+                rospy.Duration(5.0),
+            ):
+                raise rospy.ROSException(
+                    "Transform %s -> %s not available" % (self.base_frame, self.tool_frame)
+                )
         super(admittance_control_sim, self).init_offset_and_latch()
 
 
