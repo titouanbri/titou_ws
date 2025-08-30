@@ -1,9 +1,11 @@
 #!/usr/bin/env python
-"""Publishes sinusoidal elbow and wrist positions for testing.
+"""Publishes sinusoidal elbow and wrist positions for tracking.
 
 This node simulates the topics normally provided by another PC by
-publishing `geometry_msgs/PointStamped` messages with coordinates that vary
-sinusoidally on `/right_arm/elbow` and `/right_arm/wrist`.
+publishing ``geometry_msgs/PointStamped`` messages with coordinates that
+vary sinusoidally on ``/right_arm/elbow`` and ``/right_arm/wrist``.  The
+motion parameters (rate, amplitude, frequency and base positions) can be
+configured via ROS parameters.
 """
 import math
 import rospy
@@ -15,7 +17,7 @@ def main():
     elbow_pub = rospy.Publisher("/right_arm/elbow", PointStamped, queue_size=1)
     wrist_pub = rospy.Publisher("/right_arm/wrist", PointStamped, queue_size=1)
 
-    rate = rospy.Rate(50)  # Hz
+    rate = rospy.Rate(rospy.get_param("~rate", 50))  # Hz
 
     elbow_msg = PointStamped()
     wrist_msg = PointStamped()
@@ -23,11 +25,19 @@ def main():
     wrist_msg.header.frame_id = "base_link"
 
     # Parameters for sinusoidal motion
-    elbow_base = Point(0.4, 0.0, 0.3)
-    wrist_base = Point(0.6, 0.0, 0.2)
+    elbow_base = Point(
+        rospy.get_param("~elbow_base_x", 0.4),
+        rospy.get_param("~elbow_base_y", 0.0),
+        rospy.get_param("~elbow_base_z", 0.3),
+    )
+    wrist_base = Point(
+        rospy.get_param("~wrist_base_x", 0.6),
+        rospy.get_param("~wrist_base_y", 0.0),
+        rospy.get_param("~wrist_base_z", 0.2),
+    )
 
-    amplitude = 0.1
-    frequency = 0.5  # Hz
+    amplitude = rospy.get_param("~amplitude", 0.1)
+    frequency = rospy.get_param("~frequency", 0.5)  # Hz
 
     while not rospy.is_shutdown():
         now = rospy.Time.now()
