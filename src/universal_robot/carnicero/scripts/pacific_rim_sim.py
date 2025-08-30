@@ -14,7 +14,8 @@ from urdf_parser_py.urdf import URDF
 import PyKDL
 from kdl_parser_py.urdf import treeFromUrdfModel
 import os
-import importlib.util
+import sys
+import importlib
 import tf2_ros
 from geometry_msgs.msg import TransformStamped
 
@@ -25,9 +26,13 @@ try:  # pragma: no cover - only executed in ROS runtime
     from pacific_rim import admittance_control
 except Exception:  # noqa: BLE001 - broad to handle missing module/attr
     script_path = os.path.join(os.path.dirname(__file__), "pacific_rim.py")
-    spec = importlib.util.spec_from_file_location("pacific_rim", script_path)
-    pacific_rim = importlib.util.module_from_spec(spec)
-    spec.loader.exec_module(pacific_rim)  # type: ignore[attr-defined]
+    if sys.version_info[0] >= 3:
+        spec = importlib.util.spec_from_file_location("pacific_rim", script_path)
+        pacific_rim = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(pacific_rim)  # type: ignore[attr-defined]
+    else:  # Python 2 fallback
+        import imp  # type: ignore[deprecated]
+        pacific_rim = imp.load_source("pacific_rim", script_path)
     admittance_control = pacific_rim.admittance_control
 
 
