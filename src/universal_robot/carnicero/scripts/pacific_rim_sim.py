@@ -11,8 +11,20 @@ import rospy
 from urdf_parser_py.urdf import URDF
 import PyKDL
 from kdl_parser_py.urdf import treeFromUrdfModel
+import os
+import importlib.util
 
-from pacific_rim import admittance_control
+# Try to import the base controller from ``pacific_rim.py``.  In some
+# setups the package path may not expose ``admittance_control`` directly,
+# so fall back to loading the script explicitly from disk.
+try:  # pragma: no cover - only executed in ROS runtime
+    from pacific_rim import admittance_control
+except Exception:  # noqa: BLE001 - broad to handle missing module/attr
+    script_path = os.path.join(os.path.dirname(__file__), "pacific_rim.py")
+    spec = importlib.util.spec_from_file_location("pacific_rim", script_path)
+    pacific_rim = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(pacific_rim)  # type: ignore[attr-defined]
+    admittance_control = pacific_rim.admittance_control
 
 
 class admittance_control_sim(admittance_control):
