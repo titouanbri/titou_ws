@@ -49,9 +49,9 @@ class admittance_control(object):
         self.tf_buffer = tf2_ros.Buffer()
         self.tf_listener = tf2_ros.TransformListener(self.tf_buffer)
 
-        rospy.Subscriber('/right_arm/elbow', PointStamped, self.elbow_cb)
-        rospy.Subscriber('/right_arm/wrist', PointStamped, self.wrist_cb)
-        rospy.Subscriber("/joint_states", JointState, self.joint_state_cb)
+        rospy.Subscriber('right_arm/elbow', PointStamped, self.elbow_cb)
+        rospy.Subscriber('right_arm/wrist', PointStamped, self.wrist_cb)
+        rospy.Subscriber('joint_states', JointState, self.joint_state_cb)
 
         self.joint_state = None
         self.wrist_real = None
@@ -93,7 +93,7 @@ class admittance_control(object):
         self.joint_names = ['shoulder_pan_joint','shoulder_lift_joint','elbow_joint',
                             'wrist_1_joint','wrist_2_joint','wrist_3_joint']
 
-        self.joint_vel_pub = rospy.Publisher('/joint_group_vel_controller/command',
+        self.joint_vel_pub = rospy.Publisher('joint_group_vel_controller/command',
                                              Float64MultiArray, queue_size=1)
 
         self.last_pose_real = None
@@ -177,9 +177,9 @@ class admittance_control(object):
 
     # ------------------ switch contrôleurs ------------------
     def switch_controllers(self, start_list, stop_list):
-        rospy.wait_for_service('/controller_manager/switch_controller')
+        rospy.wait_for_service('controller_manager/switch_controller')
         try:
-            switch_controller = rospy.ServiceProxy('/controller_manager/switch_controller', SwitchController)
+            switch_controller = rospy.ServiceProxy('controller_manager/switch_controller', SwitchController)
             resp = switch_controller(start_controllers=start_list, stop_controllers=stop_list, strictness=1)
             return resp.ok
         except Exception as e:

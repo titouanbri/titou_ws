@@ -14,8 +14,8 @@ from geometry_msgs.msg import Point, PointStamped
 
 def main():
     rospy.init_node("right_arm_constant_publisher")
-    elbow_pub = rospy.Publisher("/right_arm/elbow", PointStamped, queue_size=1)
-    wrist_pub = rospy.Publisher("/right_arm/wrist", PointStamped, queue_size=1)
+    elbow_pub = rospy.Publisher("right_arm/elbow", PointStamped, queue_size=1)
+    wrist_pub = rospy.Publisher("right_arm/wrist", PointStamped, queue_size=1)
 
     rate = rospy.Rate(rospy.get_param("~rate", 50))  # Hz
 
