@@ -11,10 +11,10 @@ import PyKDL
 from kdl_parser_py.urdf import treeFromUrdfModel
 from controller_manager_msgs.srv import SwitchController
 
-# ------------------ contrôleur (position seule) ------------------
-class admittance_control(object):
+# ------------------ contrôleur (PID position -> vitesse) ------------------
+class PR_control(object):
     def __init__(self):
-        rospy.init_node("admittance", anonymous=True)
+        rospy.init_node("PR", anonymous=True)
 
         # IMPORTANT: on contrôle et on mesure à la même frame
         self.tool_frame = "wrist_3_link"
@@ -36,17 +36,22 @@ class admittance_control(object):
         # Gains et limites
         self.freq = 350.0
         self.dt = 1.0 / self.freq
-        self.Kp_pos = 0.5
-        self.Kd_pos = 1.0
-        self.lambda_dls = 0.08
+        self.Kp_pos = 0.25
+        self.Kd_pos = 0.8
+        self.Ki_pos = 0.02              # [~1/s] (commencer petit)
+        self.I_term_max = 0.10         # [m/s] limite par axe du terme intégral effectif
+        self.I_leak = 0.0              # [1/s] fuite de l'intégrateur (0 pour désactiver)
+        self.I_pos = np.zeros(3)       # état intégrateur (∫ e dt)
+
+        self.lambda_dls = 0.18
         self.V_alpha = 0.1
-        self.v_lin_max = 0.20     # m/s
+        self.v_lin_max = 0.08    # m/s
         self.qdot_max  = 0.8      # rad/s
 
         # Seuil de MAJ de la consigne (si cible bouge)
         self.pos_tol_update = 0.005    # 5 mm
         # Deadband position pour commander zéro
-        self.pos_deadband = 0.002      # 2 mm
+        self.pos_deadband = 0.005      # 2 mm
 
         # KDL : chaîne base -> wrist_3_link (même que la pose mesurée)
         robot_description = rospy.get_param("/robot_description")
@@ -107,6 +112,7 @@ class admittance_control(object):
 
         # Latch consigne = position actuelle -> zéro mouvement au départ
         self.ref_pos = self.wrist_real + self.offset
+        self.I_pos = np.zeros(3)  # reset intégrateur au latch
         rospy.loginfo("Consigne latched (pos=%s)", np.round(self.ref_pos, 4))
 
     # ------------------ switch contrôleurs ------------------
@@ -155,6 +161,7 @@ class admittance_control(object):
             moved_pos = np.linalg.norm(p_tgt - self.ref_pos) > self.pos_tol_update
             if moved_pos:
                 self.ref_pos = p_tgt
+                self.I_pos = np.zeros(3)  # éviter le "kick" intégral à changement de cible
                 rospy.loginfo("Nouvelle consigne (Δpos: %.1f mm)", 1000.0*np.linalg.norm(p_tgt - p_real))
 
             # --------- erreur position ----------
@@ -166,11 +173,29 @@ class admittance_control(object):
             else:
                 v_meas = (p_real - self.last_p_real) / self.dt
 
-            # --------- deadband position ----------
+            # --------- PID position -> vitesse ----------
             if np.linalg.norm(e_pos) < self.pos_deadband:
+                # deadband: commande zéro + reset intégrateur
                 v_cmd = np.zeros(3)
+                self.I_pos = np.zeros(3)
             else:
-                v_cmd = self.Kp_pos * e_pos - self.Kd_pos * v_meas
+                # intégrateur : accumulateur + fuite optionnelle
+                self.I_pos += e_pos * self.dt
+                if self.I_leak > 0.0:
+                    self.I_pos *= (1.0 - self.I_leak * self.dt)
+
+                # terme intégral limité et anti-windup basique
+                if self.Ki_pos > 0.0:
+                    # limite directement le terme I effectif (en [m/s]) puis reflète sur l'état
+                    I_term = self.Ki_pos * self.I_pos
+                    I_term = np.clip(I_term, -self.I_term_max, self.I_term_max)
+                    self.I_pos = np.clip(self.I_pos,
+                                         -self.I_term_max / self.Ki_pos,
+                                          self.I_term_max / self.Ki_pos)
+                else:
+                    I_term = np.zeros(3)
+
+                v_cmd = self.Kp_pos * e_pos + I_term - self.Kd_pos * v_meas
                 v_cmd = np.clip(v_cmd, -self.v_lin_max, self.v_lin_max)
 
             # pseudo-inverse amortie (3xN)
@@ -192,9 +217,11 @@ class admittance_control(object):
 
             # log & mémoire
             self.last_p_real = p_real.copy()
-            rospy.loginfo_throttle(0.5, "||e_pos||=%.3f mm | ||v_cmd||=%.3f mm/s",
-                                   1000.0*np.linalg.norm(e_pos),
-                                   1000.0*np.linalg.norm(v_cmd))
+            rospy.loginfo_throttle(0.5,
+                "||e_pos||=%.3f mm | ||v_cmd||=%.3f mm/s",
+                1000.0*np.linalg.norm(e_pos),
+                1000.0*np.linalg.norm(v_cmd)
+            )
             rate.sleep()
 
         # arrêt propre
@@ -210,7 +237,7 @@ class admittance_control(object):
 # ------------------ main ------------------
 def main():
     try:
-        ctrl = admittance_control()
+        ctrl = PR_control()
         ctrl.switch_controllers(['joint_group_vel_controller'], ['scaled_pos_joint_traj_controller'])
         rospy.loginfo("Init offset + latch...")
         ctrl.init_offset_and_latch()

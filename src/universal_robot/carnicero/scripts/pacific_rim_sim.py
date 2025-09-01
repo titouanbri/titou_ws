@@ -1,7 +1,7 @@
 #!/usr/bin/env python
 # -*- coding: utf-8 -*-
 """
-Admittance controller pour Gazebo (UR30) avec /eff_joint_traj_controller.
+PR controller pour Gazebo (UR30) avec /eff_joint_traj_controller.
 
 Cette version s’appuie sur le contrôleur "position seule" (wrist uniquement)
 et crée un "pont" qui transforme les vitesses de joint (Float64MultiArray)
@@ -25,9 +25,53 @@ from trajectory_msgs.msg import JointTrajectory, JointTrajectoryPoint
 from controller_manager_msgs.srv import SwitchController
 from threading import Lock
 
-# --- import du contrôleur d'admittance "position seule" ---
+
+
+# ---- Début bloc à coller (ROS 1) -------------------------------------------
+
+JOINTS = [
+    "shoulder_pan_joint",
+    "shoulder_lift_joint",
+    "elbow_joint",
+    "wrist_1_joint",
+    "wrist_2_joint",
+    "wrist_3_joint",
+]
+POS_INIT = [0.0, -1.2, 1.6, -0.4, 1.4, 0.0]   # radians
+DUR_INIT = 3.0  # secondes
+
+def send_initial_pose_ros1(topic="/eff_joint_traj_controller/command"):
+    pub = rospy.Publisher(topic, JointTrajectory, queue_size=1)
+    # S’assurer que ROS est initialisé (si ton main ne l’a pas déjà fait)
+
+    # Attendre la présence du contrôleur
+    start = rospy.Time.now()
+    while pub.get_num_connections() == 0 and not rospy.is_shutdown():
+        if (rospy.Time.now() - start).to_sec() > 3.0:
+            break
+        rospy.sleep(0.05)
+
+    traj = JointTrajectory()
+    traj.header.stamp = rospy.Time.now() + rospy.Duration(0.1)  # éviter "passé"
+    traj.joint_names = JOINTS
+
+    pt = JointTrajectoryPoint()
+    pt.positions  = POS_INIT
+    pt.velocities = [0.0]*len(JOINTS)
+    pt.time_from_start = rospy.Duration(DUR_INIT)
+    traj.points = [pt]
+
+    rospy.loginfo("Envoi de la pose initiale (ROS1)…")
+    pub.publish(traj)
+
+    # Laisser le contrôleur exécuter la consigne avant de continuer
+    rospy.sleep(DUR_INIT + 0.3)
+# ---- Fin bloc à coller (ROS 1) ---------------------------------------------
+
+
+# --- import du contrôleur d'PR "position seule" ---
 try:  # pragma: no cover - seulement en runtime ROS
-    from pacific_rim import admittance_control  # <- ta classe simplifiée (wrist-only)
+    from pacific_rim import PR_control  # <- ta classe simplifiée (wrist-only)
 except Exception:
     script_path = os.path.join(os.path.dirname(__file__), "pacific_rim.py")
     if sys.version_info[0] >= 3:
@@ -37,7 +81,7 @@ except Exception:
     else:  # Python 2
         import imp  # type: ignore[deprecated]
         pacific_rim = imp.load_source("pacific_rim", script_path)
-    admittance_control = pacific_rim.admittance_control
+    PR_control = pacific_rim.PR_control
 
 
 class VelToTrajBridge(object):
@@ -90,15 +134,15 @@ class VelToTrajBridge(object):
         self.traj_pub.publish(traj)
 
 
-class admittance_control_sim(admittance_control):
+class PR_control_sim(PR_control):
     """
-    Adapte le contrôleur d'admittance (position seule) pour Gazebo en utilisant
+    Adapte le contrôleur d'PR (position seule) pour Gazebo en utilisant
     /eff_joint_traj_controller (position) au lieu d'un publisher de vitesses.
     """
 
     def __init__(self):
         # Initialise d’abord la classe de base (wrist-only, publie des vitesses)
-        super(admittance_control_sim, self).__init__()
+        super(PR_control_sim, self).__init__()
 
         # En simulation on utilise "tool0" comme frame outil
         self.tool_frame = rospy.get_param("~tool_frame", "tool0")
@@ -214,13 +258,12 @@ class admittance_control_sim(admittance_control):
                 )
 
         # Lancement de l'init offset + latch de la classe de base (position seule)
-        super(admittance_control_sim, self).init_offset_and_latch()
+        super(PR_control_sim, self).init_offset_and_latch()
 
 
 def main():
     try:
-        ctrl = admittance_control_sim()
-
+        ctrl = PR_control_sim()
         # Démarrer le contrôleur présent en simu
         start_ctrls = rospy.get_param("~start_controllers", ["eff_joint_traj_controller"])
         stop_ctrls = rospy.get_param("~stop_controllers", [])
@@ -229,7 +272,7 @@ def main():
             ok = ctrl.switch_controllers(start_ctrls, stop_ctrls)
             if not ok:
                 rospy.logwarn("Impossible de (re)configurer les contrôleurs, on continue quand même.")
-
+        send_initial_pose_ros1()
         rospy.loginfo("Init offset + latch…")
         ctrl.init_offset_and_latch()
         rospy.loginfo("Go.")
