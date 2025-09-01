@@ -44,7 +44,7 @@ class admittance_control(object):
 
         # IMPORTANT: on contrôle et on mesure à la même frame
         self.tool_frame = "wrist_3_link"
-        self.base_frame = "base_link"
+        self.base_frame = "base_link"   
 
         self.tf_buffer = tf2_ros.Buffer()
         self.tf_listener = tf2_ros.TransformListener(self.tf_buffer)
