@@ -8,6 +8,10 @@ simulation.  It expects the elbow and wrist positions to be provided on
 ``right_arm_constant_publisher.py``).  If the TF tree does not expose a
 transform between ``base_link`` and ``tool0`` the script will publish a
 static transform derived from the URDF so the controller can still start.
+
+Unlike the hardware controller, this script publishes its velocity
+commands inside a configurable namespace (``~controller_ns``) so it only
+affects the Gazebo simulation.
 """
 import rospy
 from urdf_parser_py.urdf import URDF
@@ -18,6 +22,8 @@ import sys
 import importlib
 import tf2_ros
 from geometry_msgs.msg import TransformStamped
+from std_msgs.msg import Float64MultiArray
+from controller_manager_msgs.srv import SwitchController
 
 # Try to import the base controller from ``pacific_rim.py``.  In some
 # setups the package path may not expose ``admittance_control`` directly,
@@ -56,6 +62,25 @@ class admittance_control_sim(admittance_control):
         self.kdl_jnt_to_jac_solver = PyKDL.ChainJntToJacSolver(self.kdl_chain)
         self.kdl_fk_solver = PyKDL.ChainFkSolverPos_recursive(self.kdl_chain)
         self.static_tf_broadcaster = tf2_ros.StaticTransformBroadcaster()
+        # Use a dedicated namespace for the simulated robot so commands do
+        # not reach the real hardware when both are connected.
+        self.controller_ns = rospy.get_param("~controller_ns", "/ur_sim")
+        ns = self.controller_ns.rstrip("/")
+        topic = f"{ns}/joint_group_vel_controller/command" if ns else "joint_group_vel_controller/command"
+        self.joint_vel_pub = rospy.Publisher(topic, Float64MultiArray, queue_size=1)
+
+    def switch_controllers(self, start_list, stop_list):
+        """Switch controllers within the simulation namespace."""
+        ns = self.controller_ns.rstrip("/")
+        service = f"{ns}/controller_manager/switch_controller" if ns else "controller_manager/switch_controller"
+        rospy.wait_for_service(service)
+        try:
+            switch_controller = rospy.ServiceProxy(service, SwitchController)
+            resp = switch_controller(start_controllers=start_list, stop_controllers=stop_list, strictness=1)
+            return resp.ok
+        except Exception as e:  # pragma: no cover - network/ROS errors
+            rospy.logerr("Switch controller fail: %s", e)
+            return False
 
     def init_offset_and_latch(self):
         """Wait for the TF tree before running base initialisation."""
