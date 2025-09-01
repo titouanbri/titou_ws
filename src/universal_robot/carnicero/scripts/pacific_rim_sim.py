@@ -3,10 +3,11 @@
 """
 Admittance controller pour Gazebo (UR30) avec /eff_joint_traj_controller.
 
-Cette version crée un "pont" qui transforme les vitesses de joint (Float64MultiArray)
-émises par la classe de base en petites cibles de position (JointTrajectory) envoyées
-vers /eff_joint_traj_controller/command, qui est le contrôleur disponible dans ton
-ur_gazebo (voir rostopic list).
+Cette version s’appuie sur le contrôleur "position seule" (wrist uniquement)
+et crée un "pont" qui transforme les vitesses de joint (Float64MultiArray)
+émises par la classe de base en petites cibles de position (JointTrajectory)
+envoyées vers /eff_joint_traj_controller/command, qui est le contrôleur dispo
+dans ur_gazebo.
 """
 
 import os
@@ -24,10 +25,10 @@ from trajectory_msgs.msg import JointTrajectory, JointTrajectoryPoint
 from controller_manager_msgs.srv import SwitchController
 from threading import Lock
 
-# --- import du contrôleur d'admittance d'origine ---
+# --- import du contrôleur d'admittance "position seule" ---
 try:  # pragma: no cover - seulement en runtime ROS
-    from pacific_rim import admittance_control
-except Exception:  # fallback sur un chargement direct du script
+    from pacific_rim import admittance_control  # <- ta classe simplifiée (wrist-only)
+except Exception:
     script_path = os.path.join(os.path.dirname(__file__), "pacific_rim.py")
     if sys.version_info[0] >= 3:
         spec = importlib.util.spec_from_file_location("pacific_rim", script_path)
@@ -41,36 +42,49 @@ except Exception:  # fallback sur un chargement direct du script
 
 class VelToTrajBridge(object):
     """
-    Objet "publisher" compatible .publish(msg) qui convertit un Float64MultiArray (vitesses)
-    en JointTrajectory (positions incrémentales) pour /eff_joint_traj_controller/command.
+    Convertit des vitesses en petites cibles de position pour /eff_joint_traj_controller/command.
+    Utilise un horizon futur (lookahead) pour éviter que le contrôleur rejette les points.
     """
 
     def __init__(self, traj_pub, joint_names, get_current_pos, dt):
         self.traj_pub = traj_pub
         self.joint_names = list(joint_names)
         self.get_current_pos = get_current_pos
+
+        # On ne se sert plus de dt comme horizon ; on garde dt pour compat
         self.dt = float(dt)
+        # Horizon futur du point (secs) et limite d’incrément (rad)
+        self.lookahead = rospy.get_param("~lookahead", 0.5)           # 0.5 s
+        self.max_increment = rospy.get_param("~max_increment", 0.20)  # rad (≈11.5°)
 
     def publish(self, msg):
-        # msg est un Float64MultiArray avec des vitesses rad/s
+        # msg est un Float64MultiArray (vitesses qdot) venant de la classe de base
         try:
             vels = list(msg.data)
         except Exception:
             return
-        q_curr = self.get_current_pos()  # liste des positions actuelles (rad)
+
+        q_curr = self.get_current_pos()
         n = min(len(self.joint_names), len(q_curr), len(vels))
         if n == 0:
             return
 
-        q_next = [q_curr[i] + vels[i] * self.dt for i in range(n)]
+        # Intégration simple + clamp
+        q_next = []
+        for i in range(n):
+            dq = vels[i] * self.lookahead
+            dq = max(min(dq, self.max_increment), -self.max_increment)
+            q_next.append(q_curr[i] + dq)
 
+        # IMPORTANT : estampiller DANS LE FUTUR
+        now = rospy.Time.now()
         traj = JointTrajectory()
-        traj.header.stamp = rospy.Time.now()
+        traj.header.stamp = now + rospy.Duration.from_sec(self.lookahead)
         traj.joint_names = self.joint_names[:n]
 
         pt = JointTrajectoryPoint()
         pt.positions = q_next
-        pt.time_from_start = rospy.Duration.from_sec(self.dt)  # horizon court
+        pt.time_from_start = rospy.Duration.from_sec(self.lookahead)
         traj.points = [pt]
 
         self.traj_pub.publish(traj)
@@ -78,16 +92,18 @@ class VelToTrajBridge(object):
 
 class admittance_control_sim(admittance_control):
     """
-    Adapte le contrôleur d'admittance pour Gazebo en utilisant le contrôleur
+    Adapte le contrôleur d'admittance (position seule) pour Gazebo en utilisant
     /eff_joint_traj_controller (position) au lieu d'un publisher de vitesses.
     """
 
     def __init__(self):
+        # Initialise d’abord la classe de base (wrist-only, publie des vitesses)
         super(admittance_control_sim, self).__init__()
 
-        # Utiliser tool0 en simulation
-        self.tool_frame = "tool0"
+        # En simulation on utilise "tool0" comme frame outil
+        self.tool_frame = rospy.get_param("~tool_frame", "tool0")
 
+        # Reconstruire la chaîne KDL pour base_link -> tool0
         robot_description = rospy.get_param("/robot_description")
         robot = URDF.from_xml_string(robot_description)
         ok, tree = treeFromUrdfModel(robot)
@@ -98,10 +114,10 @@ class admittance_control_sim(admittance_control):
         self.kdl_fk_solver = PyKDL.ChainFkSolverPos_recursive(self.kdl_chain)
         self.static_tf_broadcaster = tf2_ros.StaticTransformBroadcaster()
 
-        # Namespace (garde vide par défaut, ça matche les topics listés)
+        # Namespace contrôleur (vide par défaut)
         self.controller_ns = rospy.get_param("~controller_ns", "").rstrip("/")
 
-        # Topic du contrôleur trajectoire dispo chez toi
+        # Topic du contrôleur trajectoire (présent dans ur_gazebo)
         eff_topic = (
             self.controller_ns + "/eff_joint_traj_controller/command"
             if self.controller_ns
@@ -109,8 +125,7 @@ class admittance_control_sim(admittance_control):
         )
         self.traj_pub = rospy.Publisher(eff_topic, JointTrajectory, queue_size=10)
 
-        # Noms de joints UR classiques (UR30)
-        # (on pourrait les déduire du KDL/URDF, mais ceux-ci sont stables)
+        # Noms de joints UR (UR30)
         self.joint_names = [
             "shoulder_pan_joint",
             "shoulder_lift_joint",
@@ -125,13 +140,10 @@ class admittance_control_sim(admittance_control):
         self._q = [0.0] * len(self.joint_names)
         self._js_sub = rospy.Subscriber("/joint_states", JointState, self._js_cb)
 
-        # Pas d'envoi (horizon) pour la conversion vit->pos (en s)
-        self.bridge_dt = rospy.get_param("~bridge_dt", 0.10)  # 100 ms par défaut
+        # Pas d’envoi (horizon) pour la conversion vit->pos (en s)
+        self.bridge_dt = rospy.get_param("~bridge_dt", 0.10)  # 100 ms
 
-        # IMPORTANT :
-        # On remplace l'éditeur de vitesses de la classe de base par un "bridge"
-        # compatible .publish() qui enverra des JointTrajectory.
-        # Ainsi, tout le code de la classe de base continue à appeler .publish(vitesses).
+        # Remplace l’éditeur de vitesses par le "bridge" vers JointTrajectory
         self.joint_vel_pub = VelToTrajBridge(
             self.traj_pub, self.joint_names, self._get_current_pos, self.bridge_dt
         )
@@ -152,8 +164,7 @@ class admittance_control_sim(admittance_control):
 
     def switch_controllers(self, start_list, stop_list):
         """
-        Adapte le switch pour ton setup : on démarre eff_joint_traj_controller.
-        (Pas de joint_group_vel_controller dans tes topics.)
+        Démarre eff_joint_traj_controller (position). Pas de joint_group_vel_controller en simu.
         """
         ns = self.controller_ns
         service = (ns + "/controller_manager/switch_controller") if ns else "/controller_manager/switch_controller"
@@ -169,7 +180,9 @@ class admittance_control_sim(admittance_control):
             return False
 
     def init_offset_and_latch(self):
-        """Assure la TF base_link -> tool0 (fallback URDF si absente), puis init base."""
+        """
+        Assure la TF base_link -> tool0 (fallback URDF si absente), puis init de la classe de base.
+        """
         if not self.tf_buffer.can_transform(
             self.base_frame, self.tool_frame, rospy.Time(0), rospy.Duration(5.0)
         ):
@@ -199,6 +212,8 @@ class admittance_control_sim(admittance_control):
                 raise rospy.ROSException(
                     "Transform %s -> %s not available" % (self.base_frame, self.tool_frame)
                 )
+
+        # Lancement de l'init offset + latch de la classe de base (position seule)
         super(admittance_control_sim, self).init_offset_and_latch()
 
 
@@ -206,7 +221,7 @@ def main():
     try:
         ctrl = admittance_control_sim()
 
-        # Démarrer le contrôleur présent chez toi
+        # Démarrer le contrôleur présent en simu
         start_ctrls = rospy.get_param("~start_controllers", ["eff_joint_traj_controller"])
         stop_ctrls = rospy.get_param("~stop_controllers", [])
 
