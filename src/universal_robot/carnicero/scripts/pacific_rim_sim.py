@@ -63,8 +63,10 @@ class admittance_control_sim(admittance_control):
         self.kdl_fk_solver = PyKDL.ChainFkSolverPos_recursive(self.kdl_chain)
         self.static_tf_broadcaster = tf2_ros.StaticTransformBroadcaster()
         # Use a dedicated namespace for the simulated robot so commands do
-        # not reach the real hardware when both are connected.
-        self.controller_ns = rospy.get_param("~controller_ns", "/ur_sim")
+        # not reach the real hardware when both are connected.  By default
+        # controllers are assumed to live in the root namespace which matches
+        # the standard UR Gazebo launch files.
+        self.controller_ns = rospy.get_param("~controller_ns", "")
         ns = self.controller_ns.rstrip("/")
         topic = f"{ns}/joint_group_vel_controller/command" if ns else "joint_group_vel_controller/command"
         self.joint_vel_pub = rospy.Publisher(topic, Float64MultiArray, queue_size=1)
@@ -125,7 +127,14 @@ class admittance_control_sim(admittance_control):
 def main():
     try:
         ctrl = admittance_control_sim()
-        ctrl.switch_controllers(['joint_group_vel_controller'], ['scaled_pos_joint_traj_controller'])
+        start_ctrls = rospy.get_param(
+            "~start_controllers", ["joint_group_vel_controller"]
+        )
+        stop_ctrls = rospy.get_param(
+            "~stop_controllers", ["scaled_pos_joint_traj_controller"]
+        )
+        if start_ctrls or stop_ctrls:
+            ctrl.switch_controllers(start_ctrls, stop_ctrls)
         rospy.loginfo("Init offset + latch...")
         ctrl.init_offset_and_latch()
         rospy.loginfo("Go.")
