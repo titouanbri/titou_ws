@@ -36,7 +36,7 @@ class PR_control(object):
         # Gains et limites
         self.freq = 350.0
         self.dt = 1.0 / self.freq
-        self.Kp_pos = 0.25
+        self.Kp_pos = 5
         self.Kd_pos = 0.8
         self.Ki_pos = 0.02              # [~1/s] (commencer petit)
         self.I_term_max = 0.10         # [m/s] limite par axe du terme intégral effectif
@@ -51,7 +51,7 @@ class PR_control(object):
         # Seuil de MAJ de la consigne (si cible bouge)
         self.pos_tol_update = 0.005    # 5 mm
         # Deadband position pour commander zéro
-        self.pos_deadband = 0.005      # 2 mm
+        self.pos_deadband = 0.02      # 2 mm
 
         # KDL : chaîne base -> wrist_3_link (même que la pose mesurée)
         robot_description = rospy.get_param("/robot_description")
