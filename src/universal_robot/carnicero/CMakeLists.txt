@@ -178,6 +178,8 @@ catkin_install_python(PROGRAMS
   scripts/pacific_rim.py
   scripts/pacific_rim_sim.py
   scripts/right_arm_constant_publisher.py
+  scripts/pacific_rim_pos.py
+
   DESTINATION ${CATKIN_PACKAGE_BIN_DESTINATION}
 )
 

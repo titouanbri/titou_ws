@@ -10,11 +10,12 @@ from urdf_parser_py.urdf import URDF
 import PyKDL
 from kdl_parser_py.urdf import treeFromUrdfModel
 from controller_manager_msgs.srv import SwitchController
+from trajectory_msgs.msg import JointTrajectory, JointTrajectoryPoint
 
-# ------------------ contrôleur (PID position -> vitesse) ------------------
-class PR_control(object):
+# ------------------ contrôleur (PID position -> position via intégration) ------------------
+class PR_control_pos(object):
     def __init__(self):
-        rospy.init_node("PR", anonymous=True)
+        rospy.init_node("PR_pos", anonymous=True)
 
         # IMPORTANT: on contrôle et on mesure à la même frame
         self.tool_frame = "wrist_3_link"
@@ -33,38 +34,38 @@ class PR_control(object):
         self.ref_pos = None            # [x y z]
         self.offset = np.zeros(3)
 
-        # Gains et limites
+        # Gains et limites (identiques au code d'origine)
         self.freq = 350.0
         self.dt = 1.0 / self.freq
         self.Kp_pos = 3.5
         self.Kd_pos = 1.2
-        self.Ki_pos = 0.005          # [~1/s] (commencer petit)
+        self.Ki_pos = 0.005            # [~1/s]
 
         # --- corrections clés ---
-        self.I_term_max = 0.03          # [m/s] limite par axe du terme intégral effectif (resserré)
-        self.I_leak = 0.05               # [1/s] fuite de l'intégrateur (0 pour désactiver)
-        self.I_pos = np.zeros(3)        # état intégrateur (∫ e dt)
+        self.I_term_max = 0.03         # [m/s] limite du terme intégral effectif
+        self.I_leak = 0.05             # [1/s] fuite de l'intégrateur (0 pour off)
+        self.I_pos = np.zeros(3)       # état intégrateur (∫ e dt)
 
         self.lambda_dls = 0.28
 
-        # Filtre EMA des vitesses articulaires (qdot) -> latence plus faible
+        # Filtre EMA des vitesses articulaires (sur qdot_cmd)
         self.V_alpha = 0.65
 
-        # Limites vitesse
-        self.v_lin_max = 0.08    # m/s (un peu plus permissif)
-        self.qdot_max  = 1.2     # rad/s
+        # Limites
+        self.v_lin_max = 0.08    # m/s
+        self.qdot_max  = 1.2     # rad/s (borne l'incrément ∆q = qdot*dt)
 
-        # Seuil de MAJ de la consigne (si cible bouge)
+        # Seuil MAJ consigne si la cible bouge
         self.pos_tol_update = 0.005    # 5 mm
-        # Deadband position pour commander zéro (corrigé: 2 mm)
-        self.pos_deadband = 0.02      
+        # Deadband pour geler intégrateur
+        self.pos_deadband = 0.02       # 20 mm
 
-        # --- Dérivée filtrée sur la mesure (1er ordre) ---
+        # Dérivée filtrée sur la mesure (linéaire)
         self.tau_v = 0.009  # s ~ 15 ms
         self.alpha_v = self.dt / (self.tau_v + self.dt)
         self.v_meas_filt = np.zeros(3)
 
-        # Bande près de la cible pour geler l'intégrateur
+        # Bande près de la cible pour hold intégral
         self.v_band = 0.006  # m/s
 
         # Anti-windup back-calculation
@@ -75,7 +76,7 @@ class PR_control(object):
         self.ref_pos_prev = None
         self.ref_vel = np.zeros(3)
 
-        # KDL : chaîne base -> wrist_3_link (même que la pose mesurée)
+        # KDL : chaîne base -> wrist_3_link
         robot_description = rospy.get_param("/robot_description")
         robot = URDF.from_xml_string(robot_description)
         ok, tree = treeFromUrdfModel(robot)
@@ -86,11 +87,13 @@ class PR_control(object):
         self.joint_names = ['shoulder_pan_joint','shoulder_lift_joint','elbow_joint',
                             'wrist_1_joint','wrist_2_joint','wrist_3_joint']
 
-        self.joint_vel_pub = rospy.Publisher('joint_group_vel_controller/command',
-                                             Float64MultiArray, queue_size=1)
+        # --> Publication POSITION (JointTrajectory) <--
+        self.traj_pub = rospy.Publisher('/scaled_pos_joint_traj_controller/command',
+                                        JointTrajectory, queue_size=1)
 
         self.last_p_real = None
         self.qdot_filt = None
+        self.q_cmd_last = None  # pour mémoriser la dernière consigne envoyée
 
     # ------------------ callbacks ------------------
     def wrist_cb(self, msg):
@@ -108,7 +111,7 @@ class PR_control(object):
             )
             t = tf_stamped.transform.translation
             r = tf_stamped.transform.rotation
-            # Retourne [x y z qx qy qz qw] mais on n'utilisera ici que la position
+            # [x y z qx qy qz qw]
             return np.array([t.x, t.y, t.z, r.x, r.y, r.z, r.w], dtype=float)
         except Exception as e:
             rospy.logwarn("TF fail %s: %s", frame, e)
@@ -151,9 +154,6 @@ class PR_control(object):
 
     # ------------------ boucle principale ------------------
     def run(self):
-        vel_msg = Float64MultiArray()
-        vel_msg.data = [0,0,0,0,0,0]
-
         rate = rospy.Rate(self.freq)
         while not rospy.is_shutdown():
             if self.joint_state is None or self.wrist_real is None:
@@ -161,20 +161,21 @@ class PR_control(object):
 
             # ordre des joints
             try:
-                q = [self.joint_state.position[self.joint_state.name.index(jn)] for jn in self.joint_names]
+                q = np.array([self.joint_state.position[self.joint_state.name.index(jn)]
+                              for jn in self.joint_names], dtype=float)
             except ValueError:
                 rate.sleep(); continue
 
-            # Jacobien 6xN à wrist_3_link, puis on ne garde que la partie linéaire 3xN
+            # Jacobien 6xN à wrist_3_link, puis partie linéaire 3xN
             jnt_array = PyKDL.JntArray(len(q))
             for i, pos in enumerate(q):
                 jnt_array[i] = pos
             Jkdl = PyKDL.Jacobian(len(q))
             self.kdl_jnt_to_jac_solver.JntToJac(jnt_array, Jkdl)
             J6 = np.array([[Jkdl[i, j] for j in range(Jkdl.columns())] for i in range(6)], dtype=float)
-            J = J6[:3, :]  # partie linéaire uniquement
+            J = J6[:3, :]  # partie linéaire
 
-            # Position réelle de l'outil (via TF de la même frame)
+            # Position réelle de l'outil (via TF)
             x_real = self.get_pose(self.tool_frame)
             if x_real is None:
                 rate.sleep(); continue
@@ -185,7 +186,7 @@ class PR_control(object):
             moved_pos = np.linalg.norm(p_tgt - self.ref_pos) > self.pos_tol_update
             if moved_pos:
                 self.ref_pos = p_tgt
-                self.I_pos = np.zeros(3)  # éviter le "kick" intégral à changement de cible
+                self.I_pos = np.zeros(3)
                 rospy.loginfo("Nouvelle consigne (Δpos: %.1f mm)", 1000.0*np.linalg.norm(p_tgt - p_real))
 
             # --------- erreur position ----------
@@ -205,7 +206,7 @@ class PR_control(object):
             ref_vel = (self.ref_pos - self.ref_pos_prev) / self.dt
             self.ref_pos_prev = self.ref_pos.copy()
 
-            # --------- PID position -> vitesse (avec hold intégral près de 0) ----------
+            # --------- PID position -> "vitesse cartésienne" ----------
             in_band = (np.linalg.norm(e_pos) < self.pos_deadband) and (np.linalg.norm(v_meas) < self.v_band)
 
             if in_band:
@@ -213,12 +214,10 @@ class PR_control(object):
                 self.I_pos = np.zeros(3)
                 u_unsat = self.Kp_pos * e_pos - self.Kd_pos * v_meas + self.Kv_ff * ref_vel
             else:
-                # intégrateur : accumulateur + fuite optionnelle
                 self.I_pos += e_pos * self.dt
                 if self.I_leak > 0.0:
                     self.I_pos *= (1.0 - self.I_leak * self.dt)
 
-                # terme intégral limité et anti-windup basique
                 I_term = self.Ki_pos * self.I_pos
                 I_term = np.clip(I_term, -self.I_term_max, self.I_term_max)
                 if self.Ki_pos > 0.0:
@@ -231,26 +230,42 @@ class PR_control(object):
             # saturation vitesse cartésienne
             v_cmd = np.clip(u_unsat, -self.v_lin_max, self.v_lin_max)
 
-            # anti-windup back-calculation (évite que I pousse contre la saturation)
+            # anti-windup back-calculation
             if (not in_band) and (self.Ki_pos > 0.0):
-                self.I_pos += (self.dt / self.Taw) * (v_cmd - u_unsat) / max(self.Ki_pos, 1e-9)
+                self.I_pos += (self.dt / self.Taw) * (np.clip(u_unsat, -self.v_lin_max, self.v_lin_max) - u_unsat) / max(self.Ki_pos, 1e-9)
 
+            # --------- passage en articulaires et intégration -> POSITION ----------
             # pseudo-inverse amortie (3xN)
             U, S, Vt = np.linalg.svd(J, full_matrices=False)  # J: 3x6 -> U:3x3, S:3, Vt:3x6
             S_damped = S / (S**2 + self.lambda_dls**2)
             J_pinv = Vt.T.dot(np.diag(S_damped)).dot(U.T)     # 6x3
 
-            qdot = J_pinv.dot(v_cmd)  # orientation complètement ignorée
+            qdot = J_pinv.dot(v_cmd)  # commande articulaire différentielle
 
-            # filtre + saturation articulateurs
+            # filtre + saturation articulateurs (sur qdot)
             if self.qdot_filt is None:
                 self.qdot_filt = qdot
             else:
                 self.qdot_filt = self.V_alpha * qdot + (1 - self.V_alpha) * self.qdot_filt
             self.qdot_filt = np.clip(self.qdot_filt, -self.qdot_max, self.qdot_max)
 
-            vel_msg.data = self.qdot_filt.tolist()
-            self.joint_vel_pub.publish(vel_msg)
+            # Intégration explicite -> position cible à court terme
+            dq = self.qdot_filt * self.dt
+            q_cmd = q + dq
+
+            # Mémorise dernière consigne (utile pour arrêt propre)
+            self.q_cmd_last = q_cmd.copy()
+
+            # --------- publication JointTrajectory (1 point court) ----------
+            traj = JointTrajectory()
+            traj.joint_names = self.joint_names
+            pt = JointTrajectoryPoint()
+            pt.positions = q_cmd.tolist()
+            # temps court pour exécuter ce micro-pas (>= dt)
+            pt.time_from_start = rospy.Duration.from_sec(self.dt * 2.0)
+            traj.points.append(pt)
+            traj.header.stamp = rospy.Time.now()
+            self.traj_pub.publish(traj)
 
             # log & mémoire
             self.last_p_real = p_real.copy()
@@ -261,24 +276,28 @@ class PR_control(object):
             )
             rate.sleep()
 
-        # arrêt propre
-        vals = np.array(vel_msg.data, dtype=float)
-        for _ in range(100):
-            vals /= 1.03
-            vel_msg.data = vals.tolist()
-            self.joint_vel_pub.publish(vel_msg)
-            rospy.sleep(0.0025)
-        vel_msg.data = [0]*6
-        self.joint_vel_pub.publish(vel_msg)
+        # arrêt propre : republie la dernière position comme hold
+        if self.q_cmd_last is not None:
+            traj = JointTrajectory()
+            traj.joint_names = self.joint_names
+            pt = JointTrajectoryPoint()
+            pt.positions = self.q_cmd_last.tolist()
+            pt.time_from_start = rospy.Duration.from_sec(0.1)
+            traj.points.append(pt)
+            traj.header.stamp = rospy.Time.now()
+            for _ in range(5):
+                self.traj_pub.publish(traj)
+                rospy.sleep(0.02)
 
 # ------------------ main ------------------
 def main():
     try:
-        ctrl = PR_control()
-        ctrl.switch_controllers(['joint_group_vel_controller'], ['scaled_pos_joint_traj_controller'])
+        ctrl = PR_control_pos()
+        # On ACTIVE le contrôleur position et on STOPPE le contrôleur vitesse
+        ctrl.switch_controllers(['scaled_pos_joint_traj_controller'], ['joint_group_vel_controller'])
         rospy.loginfo("Init offset + latch...")
         ctrl.init_offset_and_latch()
-        rospy.loginfo("Go.")
+        rospy.loginfo("Go (position).")
         ctrl.run()
     except (rospy.ROSInterruptException, KeyboardInterrupt):
         return
