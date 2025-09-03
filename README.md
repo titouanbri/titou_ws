@@ -90,5 +90,5 @@ Because of several hardware problems, There might be changes in the script depen
 
 ## Email :
 
-[titouan.briancon@sigma-clermont.fr](mailto:titouan.briancon@sigma-clermont.fr)
+[titouan.briancon@sigma-clermont.fr](mailto:titouan.briancon@sigma-clermont.fr) \n
 [matteo.proverbio@sigma-clermont.fr](mailto:matteo.proverbio@sigma-clermont.fr)
