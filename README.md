@@ -88,10 +88,7 @@ There are publisher for the rokubi serial and ethercat, and the admittance code.
 # Important 
 Because of several hardware problems, There might be changes in the script depending on which is the last configuration used, if there are problems don't hesitate to contact the autors.
 
-## Email of the GOAT, “UR30 pin crusher”, “UR30 thunderstriker”:
+## Email :
 
 [titouan.briancon@sigma-clermont.fr](mailto:titouan.briancon@sigma-clermont.fr)
-
-## Email of the “demagnetizer”, “Bota crumpler”:
-
 [matteo.proverbio@sigma-clermont.fr](mailto:matteo.proverbio@sigma-clermont.fr)
