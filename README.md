@@ -35,7 +35,9 @@ sudo apt install -y \
   ros-noetic-xacro \
   ros-noetic-moveit \
   ros-noetic-joint-state-publisher \
-  ros-noetic-gazebo-ros-pkgs ros-noetic-gazebo-ros-control ros-noetic-gazebo-plugins
+  ros-noetic-gazebo-ros-pkgs ros-noetic-gazebo-ros-control ros-noetic-gazebo-plugins \
+  ros-noetic-ros-control ros-noetic-ros-controllers \
+  
 
 ```
 
