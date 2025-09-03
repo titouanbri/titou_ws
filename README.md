@@ -86,7 +86,7 @@ There are publisher for the rokubi serial and ethercat, and the admittance code.
 
 
 # Important 
-Because of several hardware problems, There might be changes in the script depending on which is the last configuration used, if there are problems don't hesitate to contact the autors.
+Because of several hardware problems, There might be changes in the script depending on which is the last configuration used, if there are problems don't hesitate to contact us.
 
 ## Email :
 
