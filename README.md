@@ -14,7 +14,11 @@ sudo apt update
 ```
 rosdep init
 rosdep update
+```
+```
 cd titou_ws/ #or the name you gave to the ws
+```
+```
 rosdep install --from-paths src --ignore-src -r -y
 ```
 ```

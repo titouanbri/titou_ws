@@ -174,19 +174,7 @@ class MoveGroupPythonInterfaceTutorial(object):
         self.group_names = group_names
 
     def go_to_joint_state(self):
-        # Copy class variables to local variables to make the web tutorials more clear.
-        # In practice, you should use the class variables directly unless you have a good
-        # reason not to.
         move_group = self.move_group
-
-        ## BEGIN_SUB_TUTORIAL plan_to_joint_state
-        ##
-        ## Planning to a Joint Goal
-        ## ^^^^^^^^^^^^^^^^^^^^^^^^
-        ## The Panda's zero configuration is at a `singularity <https://www.quora.com/Robotics-What-is-meant-by-kinematic-singularity>`_, so the first
-        ## thing we want to do is move it to a slightly better configuration.
-        ## We use the constant `tau = 2*pi <https://en.wikipedia.org/wiki/Turn_(angle)#Tau_proposals>`_ for convenience:
-        # We get the joint values from the group and change some of the values:
         joint_goal = move_group.get_current_joint_values()
         joint_goal[0] = 0
         joint_goal[1] = -tau/4
@@ -194,196 +182,67 @@ class MoveGroupPythonInterfaceTutorial(object):
         joint_goal[3] = tau/4
         joint_goal[4] = tau/4
         joint_goal[5] = 0
-        
-
-        # The go command can be called with joint values, poses, or without any
-        # parameters if you have already set the pose or joint target for the group
         move_group.go(joint_goal, wait=True)
-
-        # Calling ``stop()`` ensures that there is no residual movement
         move_group.stop()
-
-        ## END_SUB_TUTORIAL
-
-        # For testing:
         current_joints = move_group.get_current_joint_values()
         return all_close(joint_goal, current_joints, 0.01)
 
     def go_to_pose_goal(self,a,b,c):
-        # Copy class variables to local variables to make the web tutorials more clear.
-        # In practice, you should use the class variables directly unless you have a good
-        # reason not to.
         move_group = self.move_group
-
-        ## BEGIN_SUB_TUTORIAL plan_to_pose
-        ##
-        ## Planning to a Pose Goal
-        ## ^^^^^^^^^^^^^^^^^^^^^^^
-        ## We can plan a motion for this group to a desired pose for the
-        ## end-effector:
         pose_goal = geometry_msgs.msg.Pose()
         pose_goal.orientation.x = 1.0
         pose_goal.position.x = a
         pose_goal.position.y = b
         pose_goal.position.z = c
-
         move_group.set_pose_target(pose_goal)
-
-        ## Now, we call the planner to compute the plan and execute it.
-        # `go()` returns a boolean indicating whether the planning and execution was successful.
         success = move_group.go(wait=True)
-        # Calling `stop()` ensures that there is no residual movement
         move_group.stop()
-        # It is always good to clear your targets after planning with poses.
-        # Note: there is no equivalent function for clear_joint_value_targets().
         move_group.clear_pose_targets()
-
-        ## END_SUB_TUTORIAL
-
-        # For testing:
-        # Note that since this section of code will not be included in the tutorials
-        # we use the class variable rather than the copied state variable
         current_pose = self.move_group.get_current_pose().pose
         return all_close(pose_goal, current_pose, 0.01)
 
     def plan_cartesian_path(self,a,b,c):
-        # Copy class variables to local variables to make the web tutorials more clear.
-        # In practice, you should use the class variables directly unless you have a good
-        # reason not to.
         move_group = self.move_group
-
-        ## BEGIN_SUB_TUTORIAL plan_cartesian_path
-        ##
-        ## Cartesian Paths
-        ## ^^^^^^^^^^^^^^^
-        ## You can plan a Cartesian path directly by specifying a list of waypoints
-        ## for the end-effector to go through. If executing  interactively in a
-        ## Python shell, set scale = 1.0.
-        ##
-
-
-        
-
         waypoints = []
         wpose = move_group.get_current_pose().pose
-        wpose.position.x += a  
-        wpose.position.y += b  
+        wpose.position.x += a
+        wpose.position.y += b
         wpose.position.z += c
-
         waypoints.append(copy.deepcopy(wpose))
-
-
-        # We want the Cartesian path to be interpolated at a resolution of 1 cm
-        # which is why we will specify 0.01 as the eef_step in Cartesian
-        # translation.  We will disable the jump threshold by setting it to 0.0,
-        # ignoring the check for infeasible jumps in joint space, which is sufficient
-        # for this tutorial.
         (plan, fraction) = move_group.compute_cartesian_path(
             waypoints, 0.01  # waypoints to follow  # eef_step
         )
-
-        # Note: We are just planning, not asking move_group to actually move the robot yet:
         return plan, fraction
 
-        ## END_SUB_TUTORIAL
-
     def display_trajectory(self, plan):
-        # Copy class variables to local variables to make the web tutorials more clear.
-        # In practice, you should use the class variables directly unless you have a good
-        # reason not to.
         robot = self.robot
         display_trajectory_publisher = self.display_trajectory_publisher
-
-        ## BEGIN_SUB_TUTORIAL display_trajectory
-        ##
-        ## Displaying a Trajectory
-        ## ^^^^^^^^^^^^^^^^^^^^^^^
-        ## You can ask RViz to visualize a plan (aka trajectory) for you. But the
-        ## group.plan() method does this automatically so this is not that useful
-        ## here (it just displays the same trajectory again):
-        ##
-        ## A `DisplayTrajectory`_ msg has two primary fields, trajectory_start and trajectory.
-        ## We populate the trajectory_start with our current robot state to copy over
-        ## any AttachedCollisionObjects and add our plan to the trajectory.
         display_trajectory = moveit_msgs.msg.DisplayTrajectory()
         display_trajectory.trajectory_start = robot.get_current_state()
         display_trajectory.trajectory.append(plan)
-        # Publish
         display_trajectory_publisher.publish(display_trajectory)
 
-        ## END_SUB_TUTORIAL
-
     def execute_plan(self, plan):
-        # Copy class variables to local variables to make the web tutorials more clear.
-        # In practice, you should use the class variables directly unless you have a good
-        # reason not to.
         move_group = self.move_group
-
-        ## BEGIN_SUB_TUTORIAL execute_plan
-        ##
-        ## Executing a Plan
-        ## ^^^^^^^^^^^^^^^^
-        ## Use execute if you would like the robot to follow
-        ## the plan that has already been computed:
         move_group.execute(plan, wait=True)
-
-        ## **Note:** The robot's current joint state must be within some tolerance of the
-        ## first waypoint in the `RobotTrajectory`_ or ``execute()`` will fail
-        ## END_SUB_TUTORIAL
 
     def wait_for_state_update(
         self, box_is_known=False, box_is_attached=False, timeout=4
     ):
-        # Copy class variables to local variables to make the web tutorials more clear.
-        # In practice, you should use the class variables directly unless you have a good
-        # reason not to.
         box_name = self.box_name
         scene = self.scene
-
-        ## BEGIN_SUB_TUTORIAL wait_for_scene_update
-        ##
-        ## Ensuring Collision Updates Are Received
-        ## ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
-        ## If the Python node was just created (https://github.com/ros/ros_comm/issues/176),
-        ## or dies before actually publishing the scene update message, the message
-        ## could get lost and the box will not appear. To ensure that the updates are
-        ## made, we wait until we see the changes reflected in the
-        ## ``get_attached_objects()`` and ``get_known_object_names()`` lists.
-        ## For the purpose of this tutorial, we call this function after adding,
-        ## removing, attaching or detaching an object in the planning scene. We then wait
-        ## until the updates have been made or ``timeout`` seconds have passed.
-        ## To avoid waiting for scene updates like this at all, initialize the
-        ## planning scene interface with  ``synchronous = True``.
         start = rospy.get_time()
         seconds = rospy.get_time()
         while (seconds - start < timeout) and not rospy.is_shutdown():
-            # Test if the box is in attached objects
             attached_objects = scene.get_attached_objects([box_name])
             is_attached = len(attached_objects.keys()) > 0
-
-            # Test if the box is in the scene.
-            # Note that attaching the box will remove it from known_objects
             is_known = box_name in scene.get_known_object_names()
-
-            # Test if we are in the expected state
             if (box_is_attached == is_attached) and (box_is_known == is_known):
                 return True
-
-            # Sleep so that we give other threads time on the processor
             rospy.sleep(0.1)
             seconds = rospy.get_time()
-
-        # If we exited the while loop without returning then we timed out
         return False
-        ## END_SUB_TUTORIAL
 
-    
-
-    
-
-    
-        
-        
     def open_gripper(self):
         """Open the RG2 gripper using digital output."""
         rospy.loginfo("Opening the gripper...")
@@ -405,8 +264,87 @@ class MoveGroupPythonInterfaceTutorial(object):
             rospy.loginfo(f"Gripper closed: {response}")
         except rospy.ServiceException as e:
             rospy.logerr(f"Failed to close gripper: {e}")
-            
 
+# -*- coding: utf-8 -*-
+import math
+import rospy
+from geometry_msgs.msg import Pose
+from tf.transformations import quaternion_from_euler
+
+def _dict_to_pose(d, current_orientation=None):
+    p = Pose()
+    p.position.x = d["x"]; p.position.y = d["y"]; p.position.z = d["z"]
+    if {"qx","qy","qz","qw"}.issubset(d.keys()):
+        p.orientation.x = d["qx"]; p.orientation.y = d["qy"]
+        p.orientation.z = d["qz"]; p.orientation.w = d["qw"]
+    elif {"roll","pitch","yaw"}.issubset(d.keys()):
+        qx, qy, qz, qw = quaternion_from_euler(d["roll"], d["pitch"], d["yaw"])
+        p.orientation.x, p.orientation.y, p.orientation.z, p.orientation.w = qx, qy, qz, qw
+    elif current_orientation is not None:
+        p.orientation = current_orientation
+    else:
+        raise ValueError("Orientation absente et pose courante inconnue.")
+    return p
+
+def follow_cartesian_points(move_group, robot, points,
+                            eef_step=0.01,            # m
+                            jump_threshold=0.0,       # 0 = désactivé
+                            velocity_scale=0.2,       # 0..1
+                            accel_scale=0.2,          # 0..1
+                            avoid_collisions=True,
+                            min_fraction=0.98,
+                            max_attempts=4,
+                            execute=True):
+    """
+    Fait suivre au robot un chemin cartésien défini par une liste de waypoints.
+    - move_group : moveit_commander.MoveGroupCommander
+    - robot      : moveit_commander.RobotCommander
+    - points     : list[geometry_msgs.msg.Pose] ou list[dict] (x,y,z + (qx,qy,qz,qw) ou (roll,pitch,yaw))
+    Retourne (success: bool, fraction: float, plan)
+    """
+    current_pose = move_group.get_current_pose().pose
+    current_orientation = current_pose.orientation
+
+    waypoints = []
+    for pt in points:
+        if isinstance(pt, Pose):
+            waypoints.append(pt)
+        elif isinstance(pt, dict):
+            waypoints.append(_dict_to_pose(pt, current_orientation))
+        else:
+            raise TypeError("Chaque point doit être un Pose ou un dict.")
+
+    attempt = 0
+    fraction = 0.0
+    plan = None
+    _eef_step = float(eef_step)
+
+    while attempt < max_attempts:
+        # ---- CORRECTIF MINIMAL ICI : arguments positionnels + compatibilité sans avoid_collisions
+        try:
+            traj, fraction = move_group.compute_cartesian_path(
+                waypoints, _eef_step, jump_threshold, avoid_collisions
+            )
+        except TypeError:
+            traj, fraction = move_group.compute_cartesian_path(
+                waypoints, _eef_step, jump_threshold
+            )
+        # ---- FIN CORRECTIF
+
+        # Retiming (respect des vitesses/accélérations)
+        traj = move_group.retime_trajectory(robot.get_current_state(), traj, velocity_scale, accel_scale)
+
+        if fraction >= min_fraction:
+            plan = traj
+            break
+        _eef_step = max(_eef_step * 0.5, 0.0025)
+        attempt += 1
+
+    success = plan is not None and fraction >= min_fraction
+    if success and execute:
+        move_group.execute(plan, wait=True)
+
+    return success, fraction, plan
 
 def main():
     try:
@@ -416,32 +354,30 @@ def main():
         print("----------------------------------------------------------")
         print("Press Ctrl-D to exit at any time")
         print("")
-        # input(
-        #     "============ Press `Enter` to begin the tutorial by setting up the moveit_commander ..."
-        # )
+
         tutorial = MoveGroupPythonInterfaceTutorial()
 
-        # input(
-        #     "============ Press `Enter` to execute a movement using a joint state goal ..."
-        # )
-        # tutorial.go_to_joint_state()
+        input("test")
+        points = [
+            {"x": 0.40, "y": 0.00, "z": 0.30, "roll": 0.0, "pitch": math.pi/2, "yaw": 0.0},
+            {"x": 0.45, "y": 0.10, "z": 0.28, "roll": 0.0, "pitch": math.pi/2, "yaw": 0.0},
+            {"x": 0.50, "y": 0.00, "z": 0.26, "roll": 0.0, "pitch": math.pi/2, "yaw": 0.0},
+        ]
+
+        ok, frac, plan = follow_cartesian_points(
+            tutorial.move_group, tutorial.robot, points, velocity_scale=0.3, accel_scale=0.3
+        )
 
         input("============ Press `Enter` to execute a movement using a pose goal ...")
         tutorial.go_to_pose_goal(0.3,0.3,0.4)
-        
-        input("============ Press `Enter` to open la mano ...")
-        tutorial.open_gripper()
 
         input("============ Press `Enter` to tout faire Cartesian path ...")
-        cartesian_plan, fraction = tutorial.plan_cartesian_path(0,0,-0.2)     
+        cartesian_plan, fraction = tutorial.plan_cartesian_path(0,0,-0.2)
         tutorial.display_trajectory(cartesian_plan)
         tutorial.execute_plan(cartesian_plan)
-        
-        input("============ Press `Enter` to close la mano ...")
-        tutorial.close_gripper()
 
         input("============ Press `Enter` to tout faire Cartesian path ...")
-        cartesian_plan, fraction = tutorial.plan_cartesian_path(0,0,0.18)     
+        cartesian_plan, fraction = tutorial.plan_cartesian_path(0,0,0.18)
         tutorial.display_trajectory(cartesian_plan)
         tutorial.execute_plan(cartesian_plan)
 
@@ -449,26 +385,20 @@ def main():
         tutorial.go_to_pose_goal(0.22,0.22,0.45)
 
         input("============ Press `Enter` to tout faire Cartesian path ...")
-        cartesian_plan, fraction = tutorial.plan_cartesian_path(0,0,-0.18)     
+        cartesian_plan, fraction = tutorial.plan_cartesian_path(0,0,-0.18)
         tutorial.display_trajectory(cartesian_plan)
         tutorial.execute_plan(cartesian_plan)
-
-        input("============ Press `Enter` to open la mano ...")
-        tutorial.open_gripper()
 
         input("============ Press `Enter` to tout faire Cartesian path ...")
-        cartesian_plan, fraction = tutorial.plan_cartesian_path(0,0,0.1)     
+        cartesian_plan, fraction = tutorial.plan_cartesian_path(0,0,0.1)
         tutorial.display_trajectory(cartesian_plan)
         tutorial.execute_plan(cartesian_plan)
-
-
 
         print("============ Python tutorial demo complete!")
     except rospy.ROSInterruptException:
         return
     except KeyboardInterrupt:
         return
-
 
 if __name__ == "__main__":
     main()
@@ -490,7 +420,7 @@ if __name__ == "__main__":
 ##    http://docs.ros.org/noetic/api/moveit_msgs/html/msg/DisplayTrajectory.html
 ##
 ## .. _RobotTrajectory:
-##    http://docs.ros.org/noetic/api/moveit_msgs/html/msg/RobotTrajectory.html
+##    http://docs.ros.org/noetic/api/moveit_commander/html/classmoveit__commander_1_1robot_1_1RobotCommander.html
 ##
 ## .. _rospy:
 ##    http://docs.ros.org/noetic/api/rospy/html/
