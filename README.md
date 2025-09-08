@@ -66,7 +66,7 @@ In bota\_driver/rokubi\_ethercat/rokubi\_ethercat.launch:
 
 ### Final command to start acquisition of the ethercat sensor (runs with setup.launch)
 ```
-roslaunch rokubimini\_ethercat rokubimini\_ethercat.launch
+roslaunch rokubimini_ethercat rokubimini_ethercat.launch
 ```
 ## Launch
 
