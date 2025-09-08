@@ -70,19 +70,26 @@ roslaunch rokubimini\_ethercat rokubimini\_ethercat.launch
 ```
 ## Launch
 
-* Command to start UR driver + EtherCAT driver (modify with the correct robot info): 
+* to start UR driver : 
 ```
 roslaunch carnicero setup.launch
 ```
-In both node there is an offset problem due to the default sensor offset, the force sensor publisher make a "fake" calibration, so the robot could drift. If the robot drifts, you have to restart the node. 
-* Command to start admittance: (make sure to wait until both sensors are marked “OK” in the terminal) (slower with 300/400 Hz)
+* and if you use the ethercat sensor : 
 ```
-rosrun carnicero admittance.py 
+roslaunch carnicero setup.launch start_ethercat:=true
 ```
 
-* there is also the cpp version : 
+In both node there is an offset problem due to the default sensor offset, the force sensor publisher make a "fake" calibration, so the robot could drift. If the robot drifts, you have to restart the node. make sure to wait until both sensors are marked “OK” in the terminal.
+you have to choose the sensor used with the following key words : "serial_rkb","serial_big","ethercat" and "UR" (the internal sensor of the UR)
+
+* Command to start admittance with the python code :  (slower with 300/400 Hz)
 ```
-rosrun carnicero admittance_control_node   (faster with more than 3000 Hz, but the UR robot driver can handle 500 Hz maximum)
+rosrun carnicero admittance.py _sensor:=serial_rkb
+```
+
+* there is also the cpp version (faster with more than 3000 Hz, but the UR robot driver can handle 500 Hz maximum. Also, ROS architecture works better with cpp for real time control): 
+```
+rosrun carnicero admittance_control_node _sensor:=serial_rkb
 ```
 ## Path to scripts/launch used:
 
