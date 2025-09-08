@@ -1,4 +1,5 @@
 #!/usr/bin/env python
+# -*- coding: utf-8 -*-
 
 # Software License Agreement (BSD License)
 #
@@ -9,161 +10,100 @@
 # modification, are permitted provided that the following conditions
 # are met:
 #
-#  * Redistributions of source code must retain the above copyright
-#    notice, this list of conditions and the following disclaimer.
-#  * Redistributions in binary form must reproduce the above
-#    copyright notice, this list of conditions and the following
-#    disclaimer in the documentation and/or other materials provided
-#    with the distribution.
-#  * Neither the name of SRI International nor the names of its
-#    contributors may be used to endorse or promote products derived
-#    from this software without specific prior written permission.
+#  * Redistributions de code source doivent conserver l'avis de copyright
+#    ci-dessus, cette liste de conditions et l'avis de non-responsabilité.
+#  * Les redistributions sous forme binaire doivent reproduire l'avis de copyright
+#    ci-dessus, cette liste de conditions et l'avis de non-responsabilité dans la
+#    documentation et/ou autres matériaux fournis avec la distribution.
+#  * Ni le nom de SRI International ni les noms de ses contributeurs ne peuvent
+#    être utilisés pour approuver ou promouvoir des produits dérivés de ce logiciel
+#    sans autorisation écrite préalable spécifique.
 #
-# THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS
-# "AS IS" AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT
-# LIMITED TO, THE IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS
-# FOR A PARTICULAR PURPOSE ARE DISCLAIMED. IN NO EVENT SHALL THE
-# COPYRIGHT OWNER OR CONTRIBUTORS BE LIABLE FOR ANY DIRECT, INDIRECT,
-# INCIDENTAL, SPECIAL, EXEMPLARY, OR CONSEQUENTIAL DAMAGES (INCLUDING,
-# BUT NOT LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR SERVICES;
-# LOSS OF USE, DATA, OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER
-# CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT
-# LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN
-# ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
-# POSSIBILITY OF SUCH DAMAGE.
-#
-# Author: Acorn Pooley, Mike Lautman
+# CE LOGICIEL EST FOURNI PAR LES DÉTENTEURS DU COPYRIGHT ET LES CONTRIBUTEURS "EN L'ÉTAT"
+# ET TOUTES GARANTIES EXPRESSES OU IMPLICITES, Y COMPRIS, MAIS SANS S'Y LIMITER,
+# LES GARANTIES IMPLICITES DE QUALITÉ MARCHANDE ET D'ADÉQUATION À UN USAGE PARTICULIER
+# SONT DÉCLINÉES. EN AUCUN CAS LE PROPRIÉTAIRE DU COPYRIGHT OU LES CONTRIBUTEURS
+# NE SERONT RESPONSABLES DE DOMMAGES DIRECTS, INDIRECTS, ACCESSOIRES, SPÉCIAUX,
+# EXEMPLAIRES OU CONSÉCUTIFS (Y COMPRIS, MAIS SANS S'Y LIMITER, L'ACQUISITION DE BIENS
+# OU SERVICES DE SUBSTITUTION, LA PERTE D'UTILISATION, DE DONNÉES OU DE PROFITS,
+# OU L'INTERRUPTION D'ACTIVITÉ) QUELLE QU'EN SOIT LA CAUSE ET SUR TOUTE THÉORIE
+# DE RESPONSABILITÉ, CONTRACTUELLE, STRICTE OU DÉLICTUELLE (Y COMPRIS LA NÉGLIGENCE
+# OU AUTRE) DÉCOULANT DE L'UTILISATION DE CE LOGICIEL, MÊME SI AVISÉ DE LA POSSIBILITÉ
+# DE TELS DOMMAGES.
 
-## BEGIN_SUB_TUTORIAL imports
-##
-## To use the Python MoveIt interfaces, we will import the `moveit_commander`_ namespace.
-## This namespace provides us with a `MoveGroupCommander`_ class, a `PlanningSceneInterface`_ class,
-## and a `RobotCommander`_ class. More on these below. We also import `rospy`_ and some messages that we will use:
-##
-
-# Python 2/3 compatibility imports
 from __future__ import print_function
 from six.moves import input
 
 import sys
 import copy
+import math
 import rospy
 import moveit_commander
 import moveit_msgs.msg
 import geometry_msgs.msg
-from ur_msgs.srv import SetIO  # <-- Add this line
+from ur_msgs.srv import SetIO
 
 try:
-    from math import pi, tau, dist, fabs, cos
-except:  # For Python 2 compatibility
+    from math import pi, tau, dist, fabs, cos, sqrt
+except Exception:
     from math import pi, fabs, cos, sqrt
-
     tau = 2.0 * pi
-
     def dist(p, q):
         return sqrt(sum((p_i - q_i) ** 2.0 for p_i, q_i in zip(p, q)))
 
-
 from std_msgs.msg import String
+from geometry_msgs.msg import Pose
+from tf.transformations import quaternion_from_euler
 from moveit_commander.conversions import pose_to_list
 
-## END_SUB_TUTORIAL
 
+# ---------------------------------------------------------------------------
+# Helpers MoveIt
+# ---------------------------------------------------------------------------
 
 def all_close(goal, actual, tolerance):
-    """
-    Convenience method for testing if the values in two lists are within a tolerance of each other.
-    For Pose and PoseStamped inputs, the angle between the two quaternions is compared (the angle
-    between the identical orientations q and -q is calculated correctly).
-    @param: goal       A list of floats, a Pose or a PoseStamped
-    @param: actual     A list of floats, a Pose or a PoseStamped
-    @param: tolerance  A float
-    @returns: bool
-    """
     if type(goal) is list:
         for index in range(len(goal)):
             if abs(actual[index] - goal[index]) > tolerance:
                 return False
-
     elif type(goal) is geometry_msgs.msg.PoseStamped:
         return all_close(goal.pose, actual.pose, tolerance)
-
     elif type(goal) is geometry_msgs.msg.Pose:
         x0, y0, z0, qx0, qy0, qz0, qw0 = pose_to_list(actual)
         x1, y1, z1, qx1, qy1, qz1, qw1 = pose_to_list(goal)
-        # Euclidean distance
         d = dist((x1, y1, z1), (x0, y0, z0))
-        # phi = angle between orientations
-        cos_phi_half = fabs(qx0 * qx1 + qy0 * qy1 + qz0 * qz1 + qw0 * qw1)
-        return d <= tolerance and cos_phi_half >= cos(tolerance / 2.0)
-
+        cos_phi_half = fabs(qx0*qx1 + qy0*qy1 + qz0*qz1 + qw0*qw1)
+        return d <= tolerance and cos_phi_half >= cos(tolerance/2.0)
     return True
 
 
 class MoveGroupPythonInterfaceTutorial(object):
-    """MoveGroupPythonInterfaceTutorial"""
-
     def __init__(self):
         super(MoveGroupPythonInterfaceTutorial, self).__init__()
-
-        ## BEGIN_SUB_TUTORIAL setup
-        ##
-        ## First initialize `moveit_commander`_ and a `rospy`_ node:
         moveit_commander.roscpp_initialize(sys.argv)
         rospy.init_node("pick_and_place", anonymous=True)
 
-        ## Instantiate a `RobotCommander`_ object. Provides information such as the robot's
-        ## kinematic model and the robot's current joint states
         robot = moveit_commander.RobotCommander()
-
-        ## Instantiate a `PlanningSceneInterface`_ object.  This provides a remote interface
-        ## for getting, setting, and updating the robot's internal understanding of the
-        ## surrounding world:
         scene = moveit_commander.PlanningSceneInterface()
-
-        ## Instantiate a `MoveGroupCommander`_ object.  This object is an interface
-        ## to a planning group (group of joints).  In this tutorial the group is the primary
-        ## arm joints in the Panda robot, so we set the group's name to "manipulator".
-        ## If you are using a different robot, change this value to the name of your robot
-        ## arm planning group.
-        ## This interface can be used to plan and execute motions:
         group_name = "manipulator"
         move_group = moveit_commander.MoveGroupCommander(group_name)
 
-        ## Create a `DisplayTrajectory`_ ROS publisher which is used to display
-        ## trajectories in Rviz:
         display_trajectory_publisher = rospy.Publisher(
             "/move_group/display_planned_path",
             moveit_msgs.msg.DisplayTrajectory,
             queue_size=20,
         )
 
-        ## END_SUB_TUTORIAL
-
-        ## BEGIN_SUB_TUTORIAL basic_info
-        ##
-        ## Getting Basic Information
-        ## ^^^^^^^^^^^^^^^^^^^^^^^^^
-        # We can get the name of the reference frame for this robot:
         planning_frame = move_group.get_planning_frame()
         print("============ Planning frame: %s" % planning_frame)
-
-        # We can also print the name of the end-effector link for this group:
         tool0 = move_group.get_end_effector_link()
         print("============ End effector link: %s" % tool0)
-
-        # We can get a list of all the groups in the robot:
         group_names = robot.get_group_names()
         print("============ Available Planning Groups:", robot.get_group_names())
-
-        # Sometimes for debugging it is useful to print the entire state of the
-        # robot:
         print("============ Printing robot state")
         print(robot.get_current_state())
         print("")
-        ## END_SUB_TUTORIAL
 
-        # Misc variables
         self.box_name = ""
         self.robot = robot
         self.scene = scene
@@ -187,9 +127,10 @@ class MoveGroupPythonInterfaceTutorial(object):
         current_joints = move_group.get_current_joint_values()
         return all_close(joint_goal, current_joints, 0.01)
 
-    def go_to_pose_goal(self,a,b,c):
+    def go_to_pose_goal(self, a, b, c):
         move_group = self.move_group
         pose_goal = geometry_msgs.msg.Pose()
+        # Quaternion par défaut (ici x=1 => 180° autour de X) — adapte si besoin
         pose_goal.orientation.x = 1.0
         pose_goal.position.x = a
         pose_goal.position.y = b
@@ -201,7 +142,7 @@ class MoveGroupPythonInterfaceTutorial(object):
         current_pose = self.move_group.get_current_pose().pose
         return all_close(pose_goal, current_pose, 0.01)
 
-    def plan_cartesian_path(self,a,b,c):
+    def plan_cartesian_path(self, a, b, c):
         move_group = self.move_group
         waypoints = []
         wpose = move_group.get_current_pose().pose
@@ -210,7 +151,7 @@ class MoveGroupPythonInterfaceTutorial(object):
         wpose.position.z += c
         waypoints.append(copy.deepcopy(wpose))
         (plan, fraction) = move_group.compute_cartesian_path(
-            waypoints, 0.01  # waypoints to follow  # eef_step
+            waypoints, 0.01
         )
         return plan, fraction
 
@@ -226,9 +167,7 @@ class MoveGroupPythonInterfaceTutorial(object):
         move_group = self.move_group
         move_group.execute(plan, wait=True)
 
-    def wait_for_state_update(
-        self, box_is_known=False, box_is_attached=False, timeout=4
-    ):
+    def wait_for_state_update(self, box_is_known=False, box_is_attached=False, timeout=4):
         box_name = self.box_name
         scene = self.scene
         start = rospy.get_time()
@@ -244,40 +183,38 @@ class MoveGroupPythonInterfaceTutorial(object):
         return False
 
     def open_gripper(self):
-        """Open the RG2 gripper using digital output."""
         rospy.loginfo("Opening the gripper...")
         rospy.wait_for_service('/ur_hardware_interface/set_io')
         try:
             set_io = rospy.ServiceProxy('/ur_hardware_interface/set_io', SetIO)
-            response = set_io(1, 1, 1)  # Set digital output 1 to 0 (open gripper)
-            rospy.loginfo(f"Gripper opened: {response}")
+            response = set_io(1, 1, 1)
+            rospy.loginfo("Gripper opened: %s", response)
         except rospy.ServiceException as e:
-            rospy.logerr(f"Failed to open gripper: {e}")
+            rospy.logerr("Failed to open gripper: %s", e)
 
     def close_gripper(self):
-        """Close the RG2 gripper using digital output."""
         rospy.loginfo("Closing the gripper...")
         rospy.wait_for_service('/ur_hardware_interface/set_io')
         try:
             set_io = rospy.ServiceProxy('/ur_hardware_interface/set_io', SetIO)
-            response = set_io(1, 1, 0)  # Set digital output 1 to 1 (close gripper)
-            rospy.loginfo(f"Gripper closed: {response}")
+            response = set_io(1, 1, 0)
+            rospy.loginfo("Gripper closed: %s", response)
         except rospy.ServiceException as e:
-            rospy.logerr(f"Failed to close gripper: {e}")
+            rospy.logerr("Failed to close gripper: %s", e)
 
-# -*- coding: utf-8 -*-
-import math
-import rospy
-from geometry_msgs.msg import Pose
-from tf.transformations import quaternion_from_euler
+
+# ---------------------------------------------------------------------------
+# Génération de waypoints & suivi cartésien
+# ---------------------------------------------------------------------------
 
 def _dict_to_pose(d, current_orientation=None):
     p = Pose()
     p.position.x = d["x"]; p.position.y = d["y"]; p.position.z = d["z"]
-    if {"qx","qy","qz","qw"}.issubset(d.keys()):
+
+    if {"qx", "qy", "qz", "qw"}.issubset(d.keys()):
         p.orientation.x = d["qx"]; p.orientation.y = d["qy"]
         p.orientation.z = d["qz"]; p.orientation.w = d["qw"]
-    elif {"roll","pitch","yaw"}.issubset(d.keys()):
+    elif {"roll", "pitch", "yaw"}.issubset(d.keys()):
         qx, qy, qz, qw = quaternion_from_euler(d["roll"], d["pitch"], d["yaw"])
         p.orientation.x, p.orientation.y, p.orientation.z, p.orientation.w = qx, qy, qz, qw
     elif current_orientation is not None:
@@ -286,12 +223,13 @@ def _dict_to_pose(d, current_orientation=None):
         raise ValueError("Orientation absente et pose courante inconnue.")
     return p
 
+
 def follow_cartesian_points(move_group, robot, points,
-                            eef_step=0.01,            # m
-                            jump_threshold=0.0,       # 0 = désactivé
-                            velocity_scale=0.2,       # 0..1
-                            accel_scale=0.2,          # 0..1
-                            avoid_collisions=True,
+                            eef_step=0.01,
+                            jump_threshold=0.0,
+                            velocity_scale=0.2,
+                            accel_scale=0.2,
+                            avoid_collisions=True,  # conservé pour compat
                             min_fraction=0.98,
                             max_attempts=4,
                             execute=True):
@@ -299,7 +237,7 @@ def follow_cartesian_points(move_group, robot, points,
     Fait suivre au robot un chemin cartésien défini par une liste de waypoints.
     - move_group : moveit_commander.MoveGroupCommander
     - robot      : moveit_commander.RobotCommander
-    - points     : list[geometry_msgs.msg.Pose] ou list[dict] (x,y,z + (qx,qy,qz,qw) ou (roll,pitch,yaw))
+    - points     : list[Pose] ou list[dict] (x,y,z + quaternion ou RPY)
     Retourne (success: bool, fraction: float, plan)
     """
     current_pose = move_group.get_current_pose().pose
@@ -320,23 +258,34 @@ def follow_cartesian_points(move_group, robot, points,
     _eef_step = float(eef_step)
 
     while attempt < max_attempts:
-        # ---- CORRECTIF MINIMAL ICI : arguments positionnels + compatibilité sans avoid_collisions
+        # --- Compatibilité multi-versions de MoveIt ---
         try:
+            # Nouvelle API: (waypoints, eef_step, avoid_collisions)
             traj, fraction = move_group.compute_cartesian_path(
-                waypoints, _eef_step, jump_threshold, avoid_collisions
+                waypoints, _eef_step, bool(avoid_collisions)
             )
         except TypeError:
-            traj, fraction = move_group.compute_cartesian_path(
-                waypoints, _eef_step, jump_threshold
-            )
-        # ---- FIN CORRECTIF
+            try:
+                # Ancienne API (4 args): (waypoints, eef_step, jump_threshold, avoid_collisions)
+                traj, fraction = move_group.compute_cartesian_path(
+                    waypoints, _eef_step, float(jump_threshold), bool(avoid_collisions)
+                )
+            except TypeError:
+                # Ancienne API (3 args): (waypoints, eef_step, jump_threshold)
+                traj, fraction = move_group.compute_cartesian_path(
+                    waypoints, _eef_step, float(jump_threshold)
+                )
+        # -------------------------------------------------
 
-        # Retiming (respect des vitesses/accélérations)
-        traj = move_group.retime_trajectory(robot.get_current_state(), traj, velocity_scale, accel_scale)
+        # Retiming (respect vitesses/accélérations)
+        traj = move_group.retime_trajectory(
+            robot.get_current_state(), traj, velocity_scale, accel_scale
+        )
 
         if fraction >= min_fraction:
             plan = traj
             break
+
         _eef_step = max(_eef_step * 0.5, 0.0025)
         attempt += 1
 
@@ -346,95 +295,138 @@ def follow_cartesian_points(move_group, robot, points,
 
     return success, fraction, plan
 
+
+def make_circle_points(center, radius,
+                       normal='z',
+                       start_angle=0.0, end_angle=2*math.pi, num=160,
+                       roll=0.0, pitch=math.pi/2, yaw=0.0,
+                       follow_tangent=False):
+    """
+    Génère une LISTE DE POINTS (dict) décrivant un cercle cartésien pour MoveIt.
+
+    Paramètres
+    ----------
+    center : tuple (cx, cy, cz)
+        Centre du cercle (m).
+    radius : float
+        Rayon du cercle (m).
+    normal : str
+        'z' -> cercle horizontal dans le plan XY (z constant),
+        'x' -> cercle vertical dans le plan YZ (x constant),
+        'y' -> cercle vertical dans le plan XZ (y constant).
+    start_angle, end_angle : float
+        Angles en radians (0 → 2π pour un tour).
+    num : int
+        Nombre de waypoints (plus grand = plus lisse).
+    roll, pitch, yaw : float
+        Orientation RPY de l’outil (si follow_tangent=False).
+    follow_tangent : bool
+        Si True, adapte le yaw pour suivre la tangente du mouvement
+        (utile pour des opérations de dessin/grattage).
+
+    Retour
+    ------
+    list[dict] : chaque dict contient x, y, z, roll, pitch, yaw
+    """
+    cx, cy, cz = center
+    pts = []
+    for i in range(num + 1):
+        t = start_angle + (end_angle - start_angle) * i / num
+
+        if normal == 'z':      # cercle dans XY, z constant
+            x = cx + radius * math.cos(t)
+            y = cy + radius * math.sin(t)
+            z = cz
+            yaw_i = (yaw + t) if follow_tangent else yaw
+        elif normal == 'x':    # cercle dans YZ, x constant
+            x = cx
+            y = cy + radius * math.cos(t)
+            z = cz + radius * math.sin(t)
+            yaw_i = (yaw + t) if follow_tangent else yaw
+        elif normal == 'y':    # cercle dans XZ, y constant
+            x = cx + radius * math.cos(t)
+            y = cy
+            z = cz + radius * math.sin(t)
+            yaw_i = (yaw + t) if follow_tangent else yaw
+        else:
+            raise ValueError("normal doit être 'x', 'y' ou 'z'")
+
+        pts.append({
+            "x": x, "y": y, "z": z,
+            "roll": roll, "pitch": pitch, "yaw": yaw_i
+        })
+    return pts
+
+
+# ---------------------------------------------------------------------------
+# MAIN
+# ---------------------------------------------------------------------------
+
 def main():
     try:
         print("")
         print("----------------------------------------------------------")
-        print("Welcome to the MoveIt MoveGroup Python Interface Tutorial")
+        print("Demo: Trajectoire Circulaire avec MoveIt (waypoints cartésiens)")
         print("----------------------------------------------------------")
-        print("Press Ctrl-D to exit at any time")
+        print("Ctrl-C pour quitter à tout moment")
         print("")
 
         tutorial = MoveGroupPythonInterfaceTutorial()
 
-        input("test")
-        points = [
-            {"x": 0.40, "y": 0.00, "z": 0.30, "roll": 0.0, "pitch": math.pi/2, "yaw": 0.0},
-            {"x": 0.45, "y": 0.10, "z": 0.28, "roll": 0.0, "pitch": math.pi/2, "yaw": 0.0},
-            {"x": 0.50, "y": 0.00, "z": 0.26, "roll": 0.0, "pitch": math.pi/2, "yaw": 0.0},
-        ]
+        # === 1) Définis TON cercle ici ============================
+        center = (0.45, 0.00, 0.26)   # Centre du cercle (m)
+        radius = 0.08                 # Rayon (m)
+        normal = 'z'                  # 'z' -> plan XY ; 'x' ou 'y' pour vertical
+        num_points = 160              # Nombre de waypoints
+        # Orientation outil: ici "pointe vers le bas" (UR classique)
+        roll = 0.0
+        pitch = math.pi/2
+        yaw = 0.0
+        follow_tangent = False        # True si tu veux suivre la tangente
+        # ==========================================================
 
-        ok, frac, plan = follow_cartesian_points(
-            tutorial.move_group, tutorial.robot, points, velocity_scale=0.3, accel_scale=0.3
+        # Optionnel: amener l'outil au centre avant de commencer
+        tutorial.go_to_pose_goal(center[0], center[1], center[2])
+
+        input("Appuie sur Entrée pour générer les points du cercle...")
+
+        # 2) Génère LA LISTE DE POINTS
+        circle_points = make_circle_points(
+            center=center,
+            radius=radius,
+            normal=normal,
+            start_angle=0.0,
+            end_angle=2*math.pi,
+            num=num_points,
+            roll=roll, pitch=pitch, yaw=yaw,
+            follow_tangent=follow_tangent
         )
 
-        input("============ Press `Enter` to execute a movement using a pose goal ...")
-        tutorial.go_to_pose_goal(0.3,0.3,0.4)
+        print("Nombre de waypoints générés:", len(circle_points))
 
-        input("============ Press `Enter` to tout faire Cartesian path ...")
-        cartesian_plan, fraction = tutorial.plan_cartesian_path(0,0,-0.2)
-        tutorial.display_trajectory(cartesian_plan)
-        tutorial.execute_plan(cartesian_plan)
+        input("Appuie sur Entrée pour planifier & exécuter la trajectoire...")
 
-        input("============ Press `Enter` to tout faire Cartesian path ...")
-        cartesian_plan, fraction = tutorial.plan_cartesian_path(0,0,0.18)
-        tutorial.display_trajectory(cartesian_plan)
-        tutorial.execute_plan(cartesian_plan)
+        # 3) Passe simplement cette liste à UNE fonction
+        ok, frac, plan = follow_cartesian_points(
+            tutorial.move_group,
+            tutorial.robot,
+            circle_points,
+            eef_step=0.008,       # résolution discrète (m)
+            jump_threshold=0.0,
+            velocity_scale=0.25,
+            accel_scale=0.25,
+            min_fraction=0.95,
+            execute=True          # exécuter directement si plan OK
+        )
+        print("Résultat: success=%s, fraction=%.3f" % (ok, frac))
 
-        input("============ Press `Enter` to execute a movement using a pose goal ...")
-        tutorial.go_to_pose_goal(0.22,0.22,0.45)
+        print("============ Trajectoire circulaire terminée !")
 
-        input("============ Press `Enter` to tout faire Cartesian path ...")
-        cartesian_plan, fraction = tutorial.plan_cartesian_path(0,0,-0.18)
-        tutorial.display_trajectory(cartesian_plan)
-        tutorial.execute_plan(cartesian_plan)
-
-        input("============ Press `Enter` to tout faire Cartesian path ...")
-        cartesian_plan, fraction = tutorial.plan_cartesian_path(0,0,0.1)
-        tutorial.display_trajectory(cartesian_plan)
-        tutorial.execute_plan(cartesian_plan)
-
-        print("============ Python tutorial demo complete!")
     except rospy.ROSInterruptException:
         return
     except KeyboardInterrupt:
         return
 
+
 if __name__ == "__main__":
     main()
-
-## BEGIN_TUTORIAL
-## .. _moveit_commander:
-##    http://docs.ros.org/noetic/api/moveit_commander/html/namespacemoveit__commander.html
-##
-## .. _MoveGroupCommander:
-##    http://docs.ros.org/noetic/api/moveit_commander/html/classmoveit__commander_1_1move__group_1_1MoveGroupCommander.html
-##
-## .. _RobotCommander:
-##    http://docs.ros.org/noetic/api/moveit_commander/html/classmoveit__commander_1_1robot_1_1RobotCommander.html
-##
-## .. _PlanningSceneInterface:
-##    http://docs.ros.org/noetic/api/moveit_commander/html/classmoveit__commander_1_1planning__scene__interface_1_1PlanningSceneInterface.html
-##
-## .. _DisplayTrajectory:
-##    http://docs.ros.org/noetic/api/moveit_msgs/html/msg/DisplayTrajectory.html
-##
-## .. _RobotTrajectory:
-##    http://docs.ros.org/noetic/api/moveit_commander/html/classmoveit__commander_1_1robot_1_1RobotCommander.html
-##
-## .. _rospy:
-##    http://docs.ros.org/noetic/api/rospy/html/
-## CALL_SUB_TUTORIAL imports
-## CALL_SUB_TUTORIAL setup
-## CALL_SUB_TUTORIAL basic_info
-## CALL_SUB_TUTORIAL plan_to_joint_state
-## CALL_SUB_TUTORIAL plan_to_pose
-## CALL_SUB_TUTORIAL plan_cartesian_path
-## CALL_SUB_TUTORIAL display_trajectory
-## CALL_SUB_TUTORIAL execute_plan
-## CALL_SUB_TUTORIAL add_box
-## CALL_SUB_TUTORIAL wait_for_scene_update
-## CALL_SUB_TUTORIAL attach_object
-## CALL_SUB_TUTORIAL detach_object
-## CALL_SUB_TUTORIAL remove_object
-## END_TUTORIAL

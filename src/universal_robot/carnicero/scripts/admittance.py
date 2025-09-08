@@ -39,6 +39,7 @@ import time
 #     time.sleep(2)  
 # except serial.SerialException as e:
 #     print(f"Erreur d'ouverture du port série : {e}")
+
     
 
 
@@ -55,7 +56,18 @@ class admittance_control(object):
         self.force_data = None 
         self.joint_state = None
 
-        rospy.Subscriber('/force_sensor_eth', WrenchStamped, self.force_callback) # sensor used to acquire forces 
+        # choose the force sensor : 'serial_rkb' for the little rokubi, 'serial_big' for the big serial, 'ethercat' for the ethercat one and 'UR' for the internal sensor of the robot
+        self.which_sensor=rospy.get_param('~sensor', 'serial_rkb') # choose between 'ethercat' and 'rokubi' (the rokubi serial is not maintained anymore)
+        if self.which_sensor=='serial_rkb':
+            rospy.Subscriber('/force_sensor', WrenchStamped, self.force_callback)
+        elif self.which_sensor=='serial_big':
+            rospy.Subscriber('/force_sensor', WrenchStamped, self.force_callback)
+        elif self.which_sensor=='UR':
+            rospy.Subscriber('/wrench', WrenchStamped, self.force_callback)
+        elif self.which_sensor=='ethercat':
+            rospy.Subscriber('/force_sensor_eth', WrenchStamped, self.force_callback) # sensor used to acquire forces 
+        
+        
         rospy.Subscriber("/joint_states", JointState, self.joint_state_callback)
 
 
@@ -79,7 +91,14 @@ class admittance_control(object):
         
         self.kdl_fk_solver = PyKDL.ChainFkSolverPos_recursive(chain)
 
-        self.correction = R.from_euler('z', -np.pi / 2)  # constant correction for the sensor frame (only for the rokubi serial and ethercat)
+
+        # constant correction for the sensor frame (only for the rokubi serial and ethercat)
+        if self.which_sensor=='serial_rkb' or self.which_sensor=='ethercat':
+            self.correction = R.from_euler('z', np.pi / 2)
+        elif self.which_sensor=='serial_big':
+            self.correction = R.from_euler('z', np.pi/2)
+        elif self.which_sensor=='UR':
+            self.correction = R.from_euler('z', 0)
 
         
         self.joint_frames = [     # joint frame names (not used but useful to know)
@@ -225,7 +244,7 @@ class admittance_control(object):
 
             Rot_qui_fonctionne=Rot.as_dcm()
             force_trans = np.dot(Rot_qui_fonctionne,force) 
-            torque_trans = np.dot(Rot_qui_fonctionne,torque_manche)
+            torque_trans = np.dot(Rot_qui_fonctionne,torque)
             
             
             new_wrench = WrenchStamped()
@@ -441,17 +460,19 @@ class admittance_control(object):
 def main():
     try:
         print("node initialisation")
+        
 
         # useful is you use a special publisher for the forces, to be sure that it's closed before launching it
         # os.system("pkill -f force_sensor_publisher.py")
-        os.system("pkill -f force_sensor_eth_publisher.py")
-
-
         admittance=admittance_control()
-
-        # launching the force publisher 
-        # subprocess.Popen(["rosrun", "carnicero", "force_sensor_publisher.py"])
-        subprocess.Popen(["rosrun", "carnicero", "force_sensor_eth_publisher.py"])
+        print(admittance.which_sensor)
+        if admittance.which_sensor=='ethercat':
+            os.system("pkill -f force_sensor_eth_publisher.py")
+            subprocess.Popen(["rosrun", "carnicero", "force_sensor_eth_publisher.py"])
+        
+        elif admittance.which_sensor in ('serial_rkb', 'serial_big'):            
+            os.system("pkill -f force_sensor_publisher.py")
+            subprocess.Popen(["rosrun", "carnicero", "force_sensor_publisher.py"])
 
 
         #controller switch (as a precaution)
@@ -469,6 +490,7 @@ def main():
         return
 
 if __name__ == "__main__":
+
     main()
 
 

@@ -38,7 +38,6 @@ class BotaForceTorqueSensorComm:
     def sync_and_read_frame(self):
         while True:
             b = self.serial_read_bytes(1)
-            rospy.loginfo(b)
 
             if not b:
                 return None
