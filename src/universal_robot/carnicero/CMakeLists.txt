@@ -166,7 +166,6 @@ include_directories(
 catkin_install_python(PROGRAMS
   scripts/force_sensor_publisher.py
   scripts/admittance.py
-  scripts/admittance_planC.py
   scripts/force_sensor_eth_publisher.py
   scripts/data.py
   scripts/data2.py
