@@ -70,6 +70,8 @@ roslaunch rokubimini_ethercat rokubimini_ethercat.launch
 ```
 ## Launch
 
+### drivers
+
 * to start UR driver : 
 ```
 roslaunch carnicero setup.launch
@@ -78,6 +80,7 @@ roslaunch carnicero setup.launch
 ```
 roslaunch carnicero setup.launch start_ethercat:=true
 ```
+### nodes 
 
 In both node there is an offset problem due to the default sensor offset, the force sensor publisher make a "fake" calibration, so the robot could drift. If the robot drifts, you have to restart the node. make sure to wait until both sensors are marked “OK” in the terminal.
 you have to choose the sensor used with the following key words : "serial_rkb","serial_big","ethercat" and "UR" (the internal sensor of the UR)
