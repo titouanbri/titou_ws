@@ -192,11 +192,10 @@ find_package(catkin REQUIRED COMPONENTS
 find_package(orocos_kdl REQUIRED)
 find_package(Eigen3 REQUIRED)
 include_directories(${catkin_INCLUDE_DIRS} ${EIGEN3_INCLUDE_DIRS})
+
 add_executable(admittance_control_node src/admittance_control.cpp)
 target_link_libraries(admittance_control_node ${catkin_LIBRARIES} ${orocos_kdl_LIBRARIES})
 
-add_executable(admittance_control_v2_node src/admittance_control_v2.cpp)
-target_link_libraries(admittance_control_v2_node ${catkin_LIBRARIES} ${orocos_kdl_LIBRARIES})
 
 add_executable(pacific_rim_cpp src/pacific_rim_cpp.cpp)
 target_link_libraries(pacific_rim_cpp ${catkin_LIBRARIES} ${orocos_kdl_LIBRARIES})
