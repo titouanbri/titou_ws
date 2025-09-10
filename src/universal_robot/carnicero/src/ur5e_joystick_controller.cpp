@@ -108,7 +108,7 @@ int main(int argc, char** argv)
   std::string traj_topic = "/scaled_pos_joint_traj_controller/command"; // pour UR5e réel
   // std::string traj_topic = "/eff_joint_traj_controller/command";     // pour Gazebo
 
-  int rate_hz = 100;
+  int rate_hz = 500;
   double vel_threshold = 1e-6; // seuil sous lequel on "freeze" target
   double resync_threshold = 0.5; // rad
 
