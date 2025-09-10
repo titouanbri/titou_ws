@@ -174,6 +174,7 @@ catkin_install_python(PROGRAMS
   scripts/new_and_last_method_eth.py
   scripts/joystick_ur30.py
   scripts/joysticks_publisher.py
+  scripts/ik_joysticks_publisher.py
   scripts/pacific_rim.py
   scripts/pacific_rim_sim.py
   scripts/right_arm_constant_publisher.py
@@ -186,7 +187,7 @@ catkin_install_python(PROGRAMS
 
 find_package(catkin REQUIRED COMPONENTS
   roscpp geometry_msgs std_msgs sensor_msgs controller_manager_msgs
-  tf2_ros tf2_geometry_msgs urdf kdl_parser
+  tf2_ros tf2_geometry_msgs urdf kdl_parser trajectory_msgs
 )
 find_package(orocos_kdl REQUIRED)
 find_package(Eigen3 REQUIRED)
@@ -198,6 +199,9 @@ target_link_libraries(admittance_control_node ${catkin_LIBRARIES} ${orocos_kdl_L
 
 add_executable(pacific_rim_cpp src/pacific_rim_cpp.cpp)
 target_link_libraries(pacific_rim_cpp ${catkin_LIBRARIES} ${orocos_kdl_LIBRARIES})
+
+add_executable(ur5e_joystick_controller src/ur5e_joystick_controller.cpp)
+target_link_libraries(ur5e_joystick_controller ${catkin_LIBRARIES} ${orocos_kdl_LIBRARIES})
 
 ## Mark executables for installation
 ## See http://docs.ros.org/melodic/api/catkin/html/howto/format1/building_executables.html
